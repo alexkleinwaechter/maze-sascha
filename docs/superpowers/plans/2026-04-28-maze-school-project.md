@@ -99,7 +99,7 @@ Ziel: Lauffähige, leere `Main`-Szene mit `Main.cs` und allen Override-Methoden.
 - Create: `scripts/Hud/`
 - Create: `scripts/Views/`
 
-- [ ] **Step 1: Verzeichnisse anlegen**
+- [x] **Step 1: Verzeichnisse anlegen**
 
 PowerShell:
 
@@ -107,7 +107,7 @@ PowerShell:
 New-Item -ItemType Directory -Force -Path scenes, scripts\Maze, scripts\Generators, scripts\Solvers, scripts\Hud, scripts\Views | Out-Null
 ```
 
-- [ ] **Step 2: Verifizieren**
+- [x] **Step 2: Verifizieren**
 
 ```powershell
 Get-ChildItem -Recurse -Directory | Select-Object -ExpandProperty FullName
@@ -115,9 +115,45 @@ Get-ChildItem -Recurse -Directory | Select-Object -ExpandProperty FullName
 
 Erwartet: Alle sechs Unterordner vorhanden.
 
-### Task 0.2: Main.cs anlegen (initialisiert das C#-Projekt)
+### Task 0.2: Main.tscn anlegen und als Hauptszene setzen
 
-> Wenn man im Projektverzeichnis das erste `.cs` ablegt und in Godot lädt, generiert Godot automatisch `maze-sascha.csproj` und `maze-sascha.sln`. Wir tippen den Code und stoßen anschließend einen Solution-Build an.
+> Wir legen zuerst die Szene und die Projekteinstellung an. `Main.cs` und das C#-Projektgerüst (`.csproj` / `.sln`) folgen in Task 0.3, weil Godot 4.6.2 diese Dateien nicht zuverlässig per CLI erzeugt — der Editor muss einmal interaktiv die Solution anlegen.
+
+**Files:**
+- Create: `scenes/Main.tscn`
+- Modify: `project.godot` (`[application] run/main_scene` Eintrag)
+
+- [ ] **Step 1: `scenes/Main.tscn` per Texteditor anlegen**
+
+Godot speichert Szenen als reine Textdateien. Wir können diese Datei direkt anlegen, ohne den Editor zu starten. Die `[ext_resource]`-Zeile auf `Main.cs` setzt eine vorgemerkte Referenz — die Datei selbst tippen wir gleich in Task 0.3.
+
+```text
+[gd_scene load_steps=2 format=3 uid="uid://b0maze0main"]
+
+[ext_resource type="Script" path="res://scripts/Main.cs" id="1_main"]
+
+[node name="Main" type="Node"]
+script = ExtResource("1_main")
+```
+
+> Hinweis: `uid` darf jeder eindeutige Bezeichner sein. Godot ersetzt ihn beim ersten Speichern ohnehin durch eine generierte UID, die String-Form `uid://...` ist erlaubt.
+
+- [ ] **Step 2: `project.godot` um Hauptszene erweitern**
+
+Vor dem Block `[dotnet]` einfügen (oder `[application]` ergänzen):
+
+```ini
+[application]
+
+config/name="maze-sascha"
+config/features=PackedStringArray("4.6", "Forward Plus")
+config/icon="res://icon.svg"
+run/main_scene="res://scenes/Main.tscn"
+```
+
+### Task 0.3: Main.cs anlegen und C#-Projekt initialisieren
+
+> Beim ersten Mal muss der Godot-Editor einmal interaktiv gestartet werden: er entdeckt das `.cs`-Skript, fragt nach dem Anlegen der Solution und erzeugt dann `maze-sascha.csproj` und `maze-sascha.sln`. Erst danach funktionieren `dotnet build` und der Headless-Smoke. Die rein per CLI erreichbare Option `--build-solutions` reicht in Godot 4.6.2 dafür **nicht** aus.
 
 **Files:**
 - Create: `scripts/Main.cs`
@@ -166,13 +202,18 @@ public partial class Main : Node
 }
 ```
 
-- [ ] **Step 2: Godot Solution generieren lassen**
+- [ ] **Step 2: Godot-Editor einmal starten und C#-Projekt erzeugen lassen**
 
 ```powershell
-& $env:GODOT4 --path $PWD --build-solutions
+& $env:GODOT4 --path $PWD --editor
 ```
 
-Erwartet: `maze-sascha.csproj` und `maze-sascha.sln` liegen jetzt im Projekt-Root. Editor erzeugt diese beim ersten C#-Detekten.
+Im Editor:
+1. Falls Godot fragt, ob das C#-Projekt erzeugt werden soll → **Ja** wählen. Alternativ über Menü `Project → Tools → C# → Create C# solution`.
+2. Anschließend `Build → Build Project` (oder das Hammer-Symbol oben rechts) ausführen, damit Godot die generierten Marshalling-Quellen erzeugt.
+3. Editor schließen.
+
+Erwartet: `maze-sascha.csproj` und `maze-sascha.sln` liegen jetzt im Projekt-Root, plus ein generierter Ordner `.godot/mono/`.
 
 - [ ] **Step 3: Build prüfen**
 
@@ -182,41 +223,7 @@ dotnet build
 
 Erwartet: `Build succeeded`. Keine Warnungen außer `CS8618` falls der Compiler über später initialisierte Felder meckert (kommt erst in späteren Tasks).
 
-### Task 0.3: Main.tscn anlegen und als Hauptszene setzen
-
-**Files:**
-- Create: `scenes/Main.tscn`
-- Modify: `project.godot` (`[application] run/main_scene` Eintrag)
-
-- [ ] **Step 1: `scenes/Main.tscn` per Texteditor anlegen**
-
-Godot speichert Szenen als reine Textdateien. Wir können diese Datei direkt anlegen, ohne den Editor zu starten:
-
-```text
-[gd_scene load_steps=2 format=3 uid="uid://b0maze0main"]
-
-[ext_resource type="Script" path="res://scripts/Main.cs" id="1_main"]
-
-[node name="Main" type="Node"]
-script = ExtResource("1_main")
-```
-
-> Hinweis: `uid` darf jeder eindeutige Bezeichner sein. Godot ersetzt ihn beim ersten Speichern ohnehin durch eine generierte UID, die String-Form `uid://...` ist erlaubt.
-
-- [ ] **Step 2: `project.godot` um Hauptszene erweitern**
-
-Vor dem Block `[dotnet]` einfügen (oder `[application]` ergänzen):
-
-```ini
-[application]
-
-config/name="maze-sascha"
-config/features=PackedStringArray("4.6", "Forward Plus")
-config/icon="res://icon.svg"
-run/main_scene="res://scenes/Main.tscn"
-```
-
-- [ ] **Step 3: Headless-Smoke**
+- [ ] **Step 4: Headless-Smoke**
 
 ```powershell
 & $env:GODOT4 --headless --path $PWD --quit --verbose
