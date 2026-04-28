@@ -1533,7 +1533,7 @@ Ziel: Drei zusätzliche Erstellungsalgorithmen. Auswahl im HUD bleibt unverände
 **Files:**
 - Create: `scripts/Generators/GrowingTreeGenerator.cs`
 
-- [ ] **Step 1: Datei anlegen**
+- [x] **Step 1: Datei anlegen**
 
 ```csharp
 using System.Collections.Generic;
@@ -1606,7 +1606,7 @@ public sealed class GrowingTreeGenerator : IMazeGenerator
 }
 ```
 
-- [ ] **Step 2: In Main registrieren**
+- [x] **Step 2: In Main registrieren**
 
 In `scripts/Main.cs` das `_generators`-Dictionary erweitern:
 
@@ -1625,7 +1625,7 @@ private readonly Dictionary<string, IMazeGenerator> _generators = new()
 **Files:**
 - Create: `scripts/Generators/RecursiveDivisionGenerator.cs`
 
-- [ ] **Step 1: Datei anlegen**
+- [x] **Step 1: Datei anlegen**
 
 ```csharp
 using System.Collections.Generic;
@@ -1715,7 +1715,7 @@ public sealed class RecursiveDivisionGenerator : IMazeGenerator
 }
 ```
 
-- [ ] **Step 2: Registrieren**
+- [x] **Step 2: Registrieren**
 
 ```csharp
 private readonly Dictionary<string, IMazeGenerator> _generators = new()
@@ -1733,7 +1733,7 @@ private readonly Dictionary<string, IMazeGenerator> _generators = new()
 **Files:**
 - Create: `scripts/Generators/CellularAutomataGenerator.cs`
 
-- [ ] **Step 1: Datei anlegen**
+- [x] **Step 1: Datei anlegen**
 
 ```csharp
 using System.Collections.Generic;
@@ -1871,7 +1871,7 @@ public sealed class CellularAutomataGenerator : IMazeGenerator
 }
 ```
 
-- [ ] **Step 2: Registrieren**
+- [x] **Step 2: Registrieren**
 
 ```csharp
 private readonly Dictionary<string, IMazeGenerator> _generators = new()
