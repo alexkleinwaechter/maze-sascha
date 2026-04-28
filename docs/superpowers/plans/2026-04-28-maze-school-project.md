@@ -123,7 +123,7 @@ Erwartet: Alle sechs Unterordner vorhanden.
 - Create: `scenes/Main.tscn`
 - Modify: `project.godot` (`[application] run/main_scene` Eintrag)
 
-- [ ] **Step 1: `scenes/Main.tscn` per Texteditor anlegen**
+- [x] **Step 1: `scenes/Main.tscn` per Texteditor anlegen**
 
 Godot speichert Szenen als reine Textdateien. Wir können diese Datei direkt anlegen, ohne den Editor zu starten. Die `[ext_resource]`-Zeile auf `Main.cs` setzt eine vorgemerkte Referenz — die Datei selbst tippen wir gleich in Task 0.3.
 
@@ -138,7 +138,7 @@ script = ExtResource("1_main")
 
 > Hinweis: `uid` darf jeder eindeutige Bezeichner sein. Godot ersetzt ihn beim ersten Speichern ohnehin durch eine generierte UID, die String-Form `uid://...` ist erlaubt.
 
-- [ ] **Step 2: `project.godot` um Hauptszene erweitern**
+- [x] **Step 2: `project.godot` um Hauptszene erweitern**
 
 Vor dem Block `[dotnet]` einfügen (oder `[application]` ergänzen):
 
@@ -158,7 +158,7 @@ run/main_scene="res://scenes/Main.tscn"
 **Files:**
 - Create: `scripts/Main.cs`
 
-- [ ] **Step 1: `Main.cs` schreiben**
+- [x] **Step 1: `Main.cs` schreiben**
 
 ```csharp
 using Godot;
