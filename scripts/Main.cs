@@ -1,5 +1,7 @@
 using Godot;
+using Maze.Model;
 using Maze.UI;
+using Maze.Views;
 
 namespace Maze;
 
@@ -10,10 +12,13 @@ namespace Maze;
 public partial class Main : Node
 {
     private Hud _hud = null!;
+    private MazeView2D _view2D = null!;
+    private Model.Maze _currentMaze = null!;
 
     public override void _Ready()
     {
         _hud = GetNode<Hud>("Hud");
+        _view2D = GetNode<MazeView2D>("MazeView2D");
 
         // Signale per C#-Eventsyntax abonnieren - typsicher und ohne Magic Strings.
         _hud.GenerateRequested += OnGenerateRequested;
@@ -24,7 +29,7 @@ public partial class Main : Node
         _hud.ResetRequested += OnResetRequested;
         _hud.ViewToggleRequested += OnViewToggled;
 
-        GD.Print("[Main] HUD verbunden.");
+        GD.Print("[Main] HUD + 2D-View verbunden.");
     }
 
     public override void _Process(double delta) { }
@@ -33,8 +38,17 @@ public partial class Main : Node
 
     public override void _ExitTree() => GD.Print("[Main] _ExitTree.");
 
-    private void OnGenerateRequested(int width, int height, string generatorId) =>
-        GD.Print($"[Main] Generate {generatorId} {width}x{height}");
+    private void OnGenerateRequested(int width, int height, string generatorId)
+    {
+        GD.Print($"[Main] Erstelle leeres Maze {width}x{height} (TEST, ohne Generator).");
+        _currentMaze = new Model.Maze(width, height);
+
+        // Vorerst zeigen wir das Voll-Wand-Maze nur an. Generatoren folgen spaeter.
+        foreach (var c in _currentMaze.AllCells())
+            c.State = CellState.Open;
+
+        _view2D.SetMaze(_currentMaze);
+    }
 
     private void OnSolveRequested(string solverId) =>
         GD.Print($"[Main] Solve mit {solverId}");
