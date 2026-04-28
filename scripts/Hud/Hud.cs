@@ -133,7 +133,7 @@ public partial class Hud : CanvasLayer
         AddGenerator("Recursive Backtracker", "recursive-backtracker");
         AddGenerator("Growing Tree (75% newest, 25% random)", "growing-tree");
         AddGenerator("Recursive Division", "recursive-division");
-        AddGenerator("Cellular Automata (4-5)", "cellular-automata");
+        AddGenerator("Cellular Automata (Parr, true maze)", "cellular-automata");
         _generatorChooser.Selected = 0;
     }
 
