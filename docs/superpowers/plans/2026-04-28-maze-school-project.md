@@ -1726,150 +1726,312 @@ private readonly Dictionary<string, IMazeGenerator> _generators = new()
 };
 ```
 
-### Task 6.3 (optional): `CellularAutomataGenerator`
+### Task 6.3 (optional): `CellularAutomataGenerator` (Parr 2018, "true maze")
 
-> Erzeugt höhlenartige Layouts. Erfordert Connected-Components-Postprocessing, damit alles erreichbar ist. Optionale Erweiterung — kann später ergänzt werden.
+> **Wichtig:** Hier verwenden wir **nicht** die klassische 4-5-Höhlenregel — die produziert Höhlen, keine Labyrinthe. Statt dessen implementieren wir den Cellular-Automata-Ansatz aus **Justin A. Parr, _Generating Mazes Using Cellular Automata_ (2018)**, der ein echtes perfektes Spanning-Tree-Labyrinth (1-Zellen-breite Korridore, keine Zyklen, alle Zellen erreichbar) per Zustandsmaschine pro Zelle erzeugt.
+>
+> **Zustände pro Zelle:** `Disconnected (0)` → `Seed (1)` → `Invite (2)` → `Connected (3)`.
+>
+> **Regelablauf pro CA-Tick (Snapshot/Backbuffer-Mechanik):**
+> 1. **Disconnected**: Falls ein Nachbar im `Invite`-Zustand mit `InviteVector` auf mich zeigt → ich werde `Seed`, merke mir den Nachbarn als Eltern (`ConnectVector`), die Wand zwischen uns wird entfernt.
+> 2. **Seed**: Sammle disconnected Nachbarn. Wähle eine Richtung mit Direktionspersistenz (mit `1 - TurnProbability` geradeaus, also Gegenteil von `ConnectVector`; sonst zufällig). Setze `InviteVector`. Werde `Invite`. Hat keine Disconnected Nachbarn → werde `Connected` (Seed stirbt).
+> 3. **Invite**: Mit `BranchProbability` zurück zu `Seed` (Verzweigung), sonst → `Connected`.
+> 4. **Connected**: Nur aktiv, wenn **kein** Seed/Invite mehr lebt. Dann: borderst du Disconnected, wirst du mit `BranchProbability` wieder Seed (Failsafe).
+>
+> Optimum laut Paper: `BranchProbability = 5%`, `TurnProbability = 10%` (= 90% geradeaus).
 
 **Files:**
 - Create: `scripts/Generators/CellularAutomataGenerator.cs`
 
-- [x] **Step 1: Datei anlegen**
+- [ ] **Step 1: Datei anlegen**
 
 ```csharp
+using System;
 using System.Collections.Generic;
 using Maze.Model;
 
 namespace Maze.Generators;
 
 /// <summary>
-/// Cellular Automata-Generator (Klassische 4-5-Regel) für höhlenartige Layouts.
-/// Schritte:
-/// 1. Zufällige Wand/Open-Belegung mit Wahrscheinlichkeit p (Default 0.45 = Wand).
-/// 2. n Iterationen 4-5-Regel: Zelle wird zu Wand, wenn 5+ Nachbarn Wand sind, zu Open bei <=3.
-/// 3. Connected-Components-Pass: kleinste Komponenten werden mit der größten verbunden.
-/// 4. Anschließend "echte" Wandstruktur ableiten (nur an Open-Open-Übergängen Wand entfernt).
+/// Cellular Automata-Generator nach Justin A. Parr (2018).
+/// Erzeugt ein perfektes Spanning-Tree-Labyrinth durch eine simple
+/// 4-Zustands-Maschine pro Zelle und Snapshot-basierte CA-Ticks.
 /// </summary>
 public sealed class CellularAutomataGenerator : IMazeGenerator
 {
     public string Id   => "cellular-automata";
-    public string Name => "Cellular Automata (4-5)";
+    public string Name => "Cellular Automata (Parr, true maze)";
 
-    private const int   Iterations           = 4;
-    private const float InitialWallChance    = 0.45f;
-    private const int   BirthThreshold       = 5;
-    private const int   SurvivalThreshold    = 4;
+    // Optimum laut Paper: 5% Verzweigungswahrscheinlichkeit
+    private const int BranchProbabilityPercent = 5;
+    // Optimum laut Paper: 10% Drehwahrscheinlichkeit (= 90% geradeaus)
+    private const int TurnProbabilityPercent   = 10;
+
+    // Reine Sicherheit gegen pathologische Endlosschleifen.
+    private const int SafetyMaxTicks           = 1_000_000;
+
+    private enum CaState : byte
+    {
+        Disconnected = 0,
+        Seed         = 1,
+        Invite       = 2,
+        Connected    = 3
+    }
+
+    private struct CellInfo
+    {
+        public CaState     State;
+        // Zeigt von dieser Zelle auf die Eltern-Zelle (für Direktionspersistenz).
+        public Direction?  ConnectVector;
+        // Im Invite-Zustand: zeigt auf den eingeladenen Nachbarn.
+        public Direction?  InviteVector;
+    }
 
     public IEnumerable<GenerationStep> Generate(Model.Maze maze, System.Random random)
     {
-        // grid[x,y] = true => Wand, false => Open
-        var grid = new bool[maze.Width, maze.Height];
-        for (int y = 0; y < maze.Height; y++)
-        for (int x = 0; x < maze.Width;  x++)
-            grid[x, y] = random.NextDouble() < InitialWallChance || x == 0 || y == 0 || x == maze.Width - 1 || y == maze.Height - 1;
+        int w = maze.Width;
+        int h = maze.Height;
 
-        // Iteration der 4-5-Regel.
-        for (int iter = 0; iter < Iterations; iter++)
+        // Doppelpufferung: Wir LESEN aus current[,] und SCHREIBEN nach next[,].
+        // Am Ende jedes Ticks wird next nach current kopiert.
+        var current = new CellInfo[w, h];
+        var next    = new CellInfo[w, h];
+
+        // Eine zufällige Startzelle wird der Initial-Seed.
+        int sx = random.Next(w);
+        int sy = random.Next(h);
+        current[sx, sy].State = CaState.Seed;
+
+        Cell startCell = maze.GetCell(sx, sy);
+        startCell.State = CellState.Carving;
+        yield return new GenerationStep(startCell, null, null, CellState.Carving, "Initial seed");
+
+        for (int tick = 0; tick < SafetyMaxTicks; tick++)
         {
-            var next = new bool[maze.Width, maze.Height];
-            for (int y = 0; y < maze.Height; y++)
-            for (int x = 0; x < maze.Width;  x++)
+            // Backbuffer mit dem aktuellen Stand vorbelegen — Zellen, die keine Regel
+            // ausführen, behalten dadurch ihren Zustand.
+            Array.Copy(current, next, current.Length);
+
+            // Vor dem Regelpass einmal feststellen, ob aktuell überhaupt noch
+            // ein Seed/Invite "lebt". Wird vom Connected-Failsafe gebraucht.
+            bool anyActive = AnyActive(current, w, h);
+
+            // -------- Regelpass über alle Zellen --------
+            for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
             {
-                int wallCount = CountWallNeighbors(grid, x, y, maze.Width, maze.Height);
-                next[x, y] = grid[x, y] ? wallCount >= SurvivalThreshold : wallCount >= BirthThreshold;
+                CellInfo me = current[x, y];
+
+                switch (me.State)
+                {
+                    case CaState.Disconnected:
+                        foreach (var step in TryAcceptInvitation(maze, current, next, x, y, random))
+                            yield return step;
+                        break;
+
+                    case CaState.Seed:
+                        foreach (var step in RunSeed(maze, current, next, x, y, me, random))
+                            yield return step;
+                        break;
+
+                    case CaState.Invite:
+                        foreach (var step in RunInvite(maze, next, x, y, random))
+                            yield return step;
+                        break;
+
+                    case CaState.Connected:
+                        if (!anyActive)
+                            foreach (var step in TryRevive(maze, current, next, x, y, random))
+                                yield return step;
+                        break;
+                }
             }
-            grid = next;
-            // Wir geben nach jeder Iteration einen Sammel-Schritt aus, damit man die Welle sieht.
-            yield return new GenerationStep(maze.GetCell(0, 0), null, null, CellState.Carving, $"Iter {iter+1}");
-        }
 
-        // Connected-Components-Pass: nur größte Komponente bleibt Open, Rest wird Wand.
-        var labels = LabelComponents(grid, maze.Width, maze.Height);
-        int dominant = DominantLabel(labels, maze.Width, maze.Height);
-        if (dominant >= 0)
-        {
-            for (int y = 0; y < maze.Height; y++)
-            for (int x = 0; x < maze.Width;  x++)
-                if (labels[x, y] != dominant) grid[x, y] = true;
-        }
+            // Snapshot übernehmen: next wird zu current für den nächsten Tick.
+            Array.Copy(next, current, next.Length);
 
-        // Wandstruktur in das Maze projizieren: zwischen zwei Open-Zellen Wand entfernen.
-        for (int y = 0; y < maze.Height; y++)
-        for (int x = 0; x < maze.Width;  x++)
+            // Termination: alle Zellen entweder Connected oder noch aktiv?
+            // Wir sind fertig, wenn KEINE Disconnected-Zelle mehr existiert
+            // UND kein Seed/Invite mehr lebt (sonst wären weitere Carves möglich).
+            if (!AnyDisconnected(current, w, h) && !AnyActive(current, w, h))
+                yield break;
+        }
+    }
+
+    // ---- Zustandsregeln ------------------------------------------------------
+
+    private static IEnumerable<GenerationStep> TryAcceptInvitation(
+        Model.Maze maze, CellInfo[,] current, CellInfo[,] next,
+        int x, int y, System.Random random)
+    {
+        // Suche einen Nachbarn im Invite-Zustand, der per InviteVector auf mich zeigt.
+        foreach (var dir in DirectionHelper.All)
         {
+            var (dx, dy) = DirectionHelper.Offset(dir);
+            int nx = x + dx;
+            int ny = y + dy;
+            if (!maze.IsInside(nx, ny)) continue;
+
+            CellInfo neighbor = current[nx, ny];
+            if (neighbor.State != CaState.Invite) continue;
+            if (neighbor.InviteVector != DirectionHelper.Opposite(dir)) continue;
+
+            // Einladung annehmen: ich werde Seed, Wand zwischen uns fällt,
+            // Eltern-Vektor zeigt auf den einladenden Nachbarn.
+            next[x, y].State         = CaState.Seed;
+            next[x, y].ConnectVector = dir;
+            next[x, y].InviteVector  = null;
+
+            Cell me  = maze.GetCell(x, y);
+            Cell par = maze.GetCell(nx, ny);
+            maze.RemoveWallBetween(me, dir);
+            me.State = CellState.Carving;
+
+            yield return new GenerationStep(me, par, dir, CellState.Carving, "Accept invite");
+            yield break;
+        }
+    }
+
+    private static IEnumerable<GenerationStep> RunSeed(
+        Model.Maze maze, CellInfo[,] current, CellInfo[,] next,
+        int x, int y, CellInfo me, System.Random random)
+    {
+        // Bitfeld der Disconnected-Nachbarn (Bit i = Richtung i).
+        int neighborMask = BuildDisconnectedMask(maze, current, x, y);
+
+        if (neighborMask == 0)
+        {
+            // Kein freier Nachbar mehr -> Seed stirbt, wird Connected.
+            next[x, y].State        = CaState.Connected;
+            next[x, y].InviteVector = null;
             Cell c = maze.GetCell(x, y);
-            c.State = grid[x, y] ? CellState.Filled : CellState.Open;
-            // Standard: Wände an allen Seiten gesetzt. Wenn beide Open, brechen wir.
-            if (!grid[x, y] && x + 1 < maze.Width && !grid[x + 1, y])
-                maze.RemoveWallBetween(c, Direction.East);
-            if (!grid[x, y] && y + 1 < maze.Height && !grid[x, y + 1])
-                maze.RemoveWallBetween(c, Direction.South);
-            yield return new GenerationStep(c, null, null, c.State, "Project");
+            c.State = CellState.Open;
+            yield return new GenerationStep(c, null, null, CellState.Open, "Seed dies");
+            yield break;
+        }
+
+        // Richtungswahl mit Persistenz: 90% geradeaus, 10% zufällig.
+        Direction picked = ChooseDirection(neighborMask, me.ConnectVector, random);
+        next[x, y].State        = CaState.Invite;
+        next[x, y].InviteVector = picked;
+        // Kein Yield: Seed und Invite sehen visuell gleich aus (beide Carving).
+    }
+
+    private static IEnumerable<GenerationStep> RunInvite(
+        Model.Maze maze, CellInfo[,] next,
+        int x, int y, System.Random random)
+    {
+        if (random.Next(100) < BranchProbabilityPercent)
+        {
+            // Verzweigen: zurück zu Seed (zusätzlicher aktiver Front-Zelle).
+            next[x, y].State        = CaState.Seed;
+            next[x, y].InviteVector = null;
+            // Kein Yield: bleibt visuell Carving.
+        }
+        else
+        {
+            // Stabilisieren: Connected.
+            next[x, y].State        = CaState.Connected;
+            next[x, y].InviteVector = null;
+            Cell c = maze.GetCell(x, y);
+            c.State = CellState.Open;
+            yield return new GenerationStep(c, null, null, CellState.Open, "Connected");
         }
     }
 
-    private static int CountWallNeighbors(bool[,] grid, int x, int y, int w, int h)
+    private static IEnumerable<GenerationStep> TryRevive(
+        Model.Maze maze, CellInfo[,] current, CellInfo[,] next,
+        int x, int y, System.Random random)
     {
+        // Failsafe: nur wenn KEIN Seed/Invite mehr lebt — wird vom Aufrufer geprüft.
+        // Ich bin Connected. Borderne ich Disconnected? Dann mit BranchProbability
+        // wieder Seed werden, damit die Front weiterläuft.
+        bool bordersDisconnected = false;
+        foreach (var dir in DirectionHelper.All)
+        {
+            var (dx, dy) = DirectionHelper.Offset(dir);
+            int nx = x + dx;
+            int ny = y + dy;
+            if (!maze.IsInside(nx, ny)) continue;
+            if (current[nx, ny].State == CaState.Disconnected)
+            {
+                bordersDisconnected = true;
+                break;
+            }
+        }
+        if (!bordersDisconnected) yield break;
+        if (random.Next(100) >= BranchProbabilityPercent) yield break;
+
+        next[x, y].State = CaState.Seed;
+        Cell c = maze.GetCell(x, y);
+        c.State = CellState.Carving;
+        yield return new GenerationStep(c, null, null, CellState.Carving, "Revive");
+    }
+
+    // ---- Hilfsfunktionen -----------------------------------------------------
+
+    private static int BuildDisconnectedMask(Model.Maze maze, CellInfo[,] grid, int x, int y)
+    {
+        int mask = 0;
+        foreach (var dir in DirectionHelper.All)
+        {
+            var (dx, dy) = DirectionHelper.Offset(dir);
+            int nx = x + dx;
+            int ny = y + dy;
+            if (!maze.IsInside(nx, ny)) continue;
+            if (grid[nx, ny].State != CaState.Disconnected) continue;
+            mask |= 1 << (int)dir;
+        }
+        return mask;
+    }
+
+    private static Direction ChooseDirection(int neighborMask, Direction? connectVector, System.Random random)
+    {
+        // Geradeaus = Gegenteil von ConnectVector (Eltern liegen "hinter mir",
+        // also will ich in die Gegenrichtung weitergehen).
+        bool turnNow = random.Next(100) < TurnProbabilityPercent;
+
+        if (!turnNow && connectVector.HasValue)
+        {
+            Direction straight = DirectionHelper.Opposite(connectVector.Value);
+            if ((neighborMask & (1 << (int)straight)) != 0)
+                return straight;
+            // Geradeaus geht nicht (Wand/Rand/besetzt) — wir müssen sowieso umlenken.
+        }
+
+        // Zufällige verfügbare Richtung wählen.
+        Span<Direction> available = stackalloc Direction[4];
         int count = 0;
-        for (int dy = -1; dy <= 1; dy++)
-        for (int dx = -1; dx <= 1; dx++)
-        {
-            if (dx == 0 && dy == 0) continue;
-            int nx = x + dx, ny = y + dy;
-            if (nx < 0 || ny < 0 || nx >= w || ny >= h) { count++; continue; }
-            if (grid[nx, ny]) count++;
-        }
-        return count;
+        foreach (var dir in DirectionHelper.All)
+            if ((neighborMask & (1 << (int)dir)) != 0)
+                available[count++] = dir;
+        return available[random.Next(count)];
     }
 
-    private static int[,] LabelComponents(bool[,] grid, int w, int h)
+    private static bool AnyActive(CellInfo[,] grid, int w, int h)
     {
-        var labels = new int[w, h];
-        for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) labels[x, y] = -1;
-        int next = 0;
-        for (int y = 0; y < h; y++)
-        for (int x = 0; x < w;  x++)
-        {
-            if (grid[x, y] || labels[x, y] != -1) continue;
-            FloodFill(grid, labels, x, y, next++, w, h);
-        }
-        return labels;
-    }
-
-    private static void FloodFill(bool[,] grid, int[,] labels, int sx, int sy, int label, int w, int h)
-    {
-        var stack = new Stack<(int, int)>();
-        stack.Push((sx, sy));
-        while (stack.Count > 0)
-        {
-            var (x, y) = stack.Pop();
-            if (x < 0 || y < 0 || x >= w || y >= h) continue;
-            if (grid[x, y] || labels[x, y] != -1) continue;
-            labels[x, y] = label;
-            stack.Push((x + 1, y));
-            stack.Push((x - 1, y));
-            stack.Push((x, y + 1));
-            stack.Push((x, y - 1));
-        }
-    }
-
-    private static int DominantLabel(int[,] labels, int w, int h)
-    {
-        var counts = new Dictionary<int, int>();
         for (int y = 0; y < h; y++)
         for (int x = 0; x < w; x++)
         {
-            int l = labels[x, y];
-            if (l < 0) continue;
-            counts.TryGetValue(l, out int c);
-            counts[l] = c + 1;
+            CaState s = grid[x, y].State;
+            if (s == CaState.Seed || s == CaState.Invite) return true;
         }
-        int best = -1, bestCount = -1;
-        foreach (var (label, c) in counts)
-            if (c > bestCount) { best = label; bestCount = c; }
-        return best;
+        return false;
+    }
+
+    private static bool AnyDisconnected(CellInfo[,] grid, int w, int h)
+    {
+        for (int y = 0; y < h; y++)
+        for (int x = 0; x < w; x++)
+            if (grid[x, y].State == CaState.Disconnected) return true;
+        return false;
     }
 }
 ```
+
+> **Hinweise zur Visualisierung:** Wir geben pro CA-Tick mehrere `GenerationStep`s aus — einen pro sichtbarer Zellzustands­änderung (Accept, Seed-Tod, Connected, Revive). Reine Seed↔Invite-Wechsel werden nicht ausgegeben, weil sie visuell beide "aktiv/Carving" sind. Das ergibt eine schön welleartige Animation, ohne unsichtbare Leerschritte.
+>
+> **Vergleich mit den anderen Generatoren:** Recursive Backtracker erzeugt lange gewundene Gänge mit hohem River-Faktor; Growing Tree interpoliert je nach Strategie zwischen Backtracker- und Prim-Look; Recursive Division wirkt architektonisch. Der Parr-CA hat einen ganz eigenen Charakter: lange parallele Gänge, viele 90°-Abzweigungen, Spiralen — siehe Bilder im PDF auf Seite 32.
 
 - [x] **Step 2: Registrieren**
 
