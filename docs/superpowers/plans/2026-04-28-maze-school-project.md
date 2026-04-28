@@ -269,7 +269,7 @@ Ziel: Render-unabhängige Repräsentation eines rechteckigen Zellgitters mit Wä
 **Files:**
 - Create: `scripts/Maze/Direction.cs`
 
-- [ ] **Step 1: Datei anlegen**
+- [x] **Step 1: Datei anlegen**
 
 ```csharp
 namespace Maze.Model;
@@ -1408,7 +1408,7 @@ public sealed class RecursiveBacktrackerGenerator : IMazeGenerator
 **Files:**
 - Modify: `scripts/Main.cs`
 
-- [ ] **Step 1: Main vollständig erweitern**
+- [x] **Step 1: Main vollständig erweitern**
 
 ```csharp
 using System;
@@ -1512,7 +1512,7 @@ public partial class Main : Node
 }
 ```
 
-- [ ] **Step 2: Build & Smoketest**
+- [x] **Step 2: Build & Smoketest**
 
 ```powershell
 & $env:GODOT4 --path $PWD --build-solutions

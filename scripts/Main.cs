@@ -1,4 +1,7 @@
+using System;
+using System.Collections.Generic;
 using Godot;
+using Maze.Generators;
 using Maze.Model;
 using Maze.UI;
 using Maze.Views;
@@ -6,19 +9,28 @@ using Maze.Views;
 namespace Maze;
 
 /// <summary>
-/// Wurzelskript der Hauptszene. In dieser Phase nimmt Main HUD-Signale entgegen
-/// und gibt sie als Console-Print aus, damit die Verkabelung sichtbar ist.
+/// Wurzelskript der Hauptszene. Verbindet HUD, Runner und aktive View.
 /// </summary>
 public partial class Main : Node
 {
     private Hud _hud = null!;
     private MazeView2D _view2D = null!;
+    private AlgorithmRunner _runner = null!;
+
     private Model.Maze _currentMaze = null!;
+
+    private readonly Dictionary<string, IMazeGenerator> _generators = new()
+    {
+        ["recursive-backtracker"] = new RecursiveBacktrackerGenerator()
+    };
+
+    private readonly Random _random = new();
 
     public override void _Ready()
     {
         _hud = GetNode<Hud>("Hud");
         _view2D = GetNode<MazeView2D>("MazeView2D");
+        _runner = GetNode<AlgorithmRunner>("Runner");
 
         // Signale per C#-Eventsyntax abonnieren - typsicher und ohne Magic Strings.
         _hud.GenerateRequested += OnGenerateRequested;
@@ -29,7 +41,11 @@ public partial class Main : Node
         _hud.ResetRequested += OnResetRequested;
         _hud.ViewToggleRequested += OnViewToggled;
 
-        GD.Print("[Main] HUD + 2D-View verbunden.");
+        _runner.GenerationStepProduced += OnGenerationStepProduced;
+        _runner.GenerationFinished += OnGenerationFinished;
+        _runner.StepsPerSecond = 30f;
+
+        GD.Print("[Main] HUD, Runner und 2D-View verbunden.");
     }
 
     public override void _Process(double delta) { }
@@ -40,30 +56,60 @@ public partial class Main : Node
 
     private void OnGenerateRequested(int width, int height, string generatorId)
     {
-        GD.Print($"[Main] Erstelle leeres Maze {width}x{height} (TEST, ohne Generator).");
+        if (!_generators.TryGetValue(generatorId, out var generator))
+        {
+            GD.PrintErr($"[Main] Unbekannter Generator: {generatorId}");
+            return;
+        }
+
+        _runner.StopAll();
         _currentMaze = new Model.Maze(width, height);
-
-        // Vorerst zeigen wir das Voll-Wand-Maze nur an. Generatoren folgen spaeter.
-        foreach (var c in _currentMaze.AllCells())
-            c.State = CellState.Open;
-
         _view2D.SetMaze(_currentMaze);
+
+        _runner.StartGeneration(generator.Generate(_currentMaze, _random));
+        _runner.IsPaused = false;
+        GD.Print($"[Main] Generator gestartet: {generator.Name}");
+    }
+
+    private void OnGenerationStepProduced()
+    {
+        if (_currentMaze == null) return;
+
+        var step = _runner.LastGenerationStep;
+        step.Cell.State = step.NewState;
+        _view2D.Refresh();
+    }
+
+    private void OnGenerationFinished()
+    {
+        if (_currentMaze == null) return;
+
+        foreach (var cell in _currentMaze.AllCells())
+            cell.State = CellState.Open;
+
+        _view2D.Refresh();
+        GD.Print("[Main] Generator fertig.");
     }
 
     private void OnSolveRequested(string solverId) =>
-        GD.Print($"[Main] Solve mit {solverId}");
+        GD.Print($"[Main] Solve mit {solverId} (folgt in spaeterer Phase)");
 
     private void OnSpeedChanged(float stepsPerSecond) =>
-        GD.Print($"[Main] Tempo: {stepsPerSecond} Schritte/s");
+        _runner.StepsPerSecond = stepsPerSecond;
 
     private void OnPauseToggled(bool paused) =>
-        GD.Print($"[Main] Pause = {paused}");
+        _runner.IsPaused = paused;
 
     private void OnStepRequested() =>
-        GD.Print("[Main] Schritt angefordert");
+        _runner.ForceSingleStep();
 
-    private void OnResetRequested() =>
-        GD.Print("[Main] Reset");
+    private void OnResetRequested()
+    {
+        _runner.StopAll();
+        _currentMaze = null;
+        _view2D.SetMaze(new Model.Maze(2, 2));
+        GD.Print("[Main] Reset.");
+    }
 
     private void OnViewToggled(bool use3D) =>
         GD.Print($"[Main] 3D-Ansicht = {use3D}");
