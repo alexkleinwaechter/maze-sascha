@@ -1,0 +1,82 @@
+[gd_scene load_steps=2 format=3 uid="uid://b0maze0hud"]
+
+[ext_resource type="Script" path="res://scripts/Hud/Hud.cs" id="1_hud"]
+
+[node name="Hud" type="CanvasLayer"]
+script = ExtResource("1_hud")
+
+[node name="Root" type="PanelContainer" parent="."]
+anchor_right = 1.0
+offset_bottom = 220.0
+mouse_filter = 1
+
+[node name="Margin" type="MarginContainer" parent="Root"]
+offset_right = 1280.0
+offset_bottom = 220.0
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 8
+
+[node name="VBox" type="VBoxContainer" parent="Root/Margin"]
+
+[node name="Sizes" type="HBoxContainer" parent="Root/Margin/VBox"]
+
+[node name="WidthLabel" type="Label" parent="Root/Margin/VBox/Sizes"]
+text = "Breite: 25"
+
+[node name="WidthSlider" type="HSlider" parent="Root/Margin/VBox/Sizes"]
+min_value = 5.0
+max_value = 75.0
+step = 1.0
+value = 25.0
+size_flags_horizontal = 3
+
+[node name="HeightLabel" type="Label" parent="Root/Margin/VBox/Sizes"]
+text = "Hoehe: 25"
+
+[node name="HeightSlider" type="HSlider" parent="Root/Margin/VBox/Sizes"]
+min_value = 5.0
+max_value = 75.0
+step = 1.0
+value = 25.0
+size_flags_horizontal = 3
+
+[node name="SpeedRow" type="HBoxContainer" parent="Root/Margin/VBox"]
+
+[node name="SpeedLabel" type="Label" parent="Root/Margin/VBox/SpeedRow"]
+text = "Tempo: 30 Schritte/s"
+
+[node name="SpeedSlider" type="HSlider" parent="Root/Margin/VBox/SpeedRow"]
+min_value = 1.0
+max_value = 240.0
+step = 1.0
+value = 30.0
+size_flags_horizontal = 3
+
+[node name="Algos" type="HBoxContainer" parent="Root/Margin/VBox"]
+
+[node name="GeneratorChooser" type="OptionButton" parent="Root/Margin/VBox/Algos"]
+
+[node name="SolverChooser" type="OptionButton" parent="Root/Margin/VBox/Algos"]
+
+[node name="View3DToggle" type="CheckBox" parent="Root/Margin/VBox/Algos"]
+text = "3D-Ansicht"
+
+[node name="Buttons" type="HBoxContainer" parent="Root/Margin/VBox"]
+
+[node name="GenerateButton" type="Button" parent="Root/Margin/VBox/Buttons"]
+text = "Erstellen"
+
+[node name="SolveButton" type="Button" parent="Root/Margin/VBox/Buttons"]
+text = "Loesen"
+
+[node name="PauseButton" type="Button" parent="Root/Margin/VBox/Buttons"]
+text = "Pause"
+toggle_mode = true
+
+[node name="StepButton" type="Button" parent="Root/Margin/VBox/Buttons"]
+text = "Schritt"
+
+[node name="ResetButton" type="Button" parent="Root/Margin/VBox/Buttons"]
+text = "Reset"

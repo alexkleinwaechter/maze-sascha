@@ -1,39 +1,56 @@
 using Godot;
+using Maze.UI;
 
 namespace Maze;
 
 /// <summary>
-/// Wurzelskript der Hauptszene. Verbindet HUD, Datenmodell und die aktive View.
-/// In dieser Phase ist Main noch ein leeres Skelett mit allen Lebenszyklus-Methoden.
+/// Wurzelskript der Hauptszene. In dieser Phase nimmt Main HUD-Signale entgegen
+/// und gibt sie als Console-Print aus, damit die Verkabelung sichtbar ist.
 /// </summary>
 public partial class Main : Node
 {
-    // Wird aufgerufen, wenn der Knoten zum SceneTree hinzugefügt wurde
-    // und alle Kinder ebenfalls bereit sind. Hier werden später Referenzen
-    // auf HUD und Views aufgelöst.
+    private Hud _hud = null!;
+
     public override void _Ready()
     {
-        GD.Print("[Main] _Ready: Hauptszene wurde geladen.");
+        _hud = GetNode<Hud>("Hud");
+
+        // Signale per C#-Eventsyntax abonnieren - typsicher und ohne Magic Strings.
+        _hud.GenerateRequested += OnGenerateRequested;
+        _hud.SolveRequested += OnSolveRequested;
+        _hud.SpeedChanged += OnSpeedChanged;
+        _hud.PauseToggle += OnPauseToggled;
+        _hud.StepRequested += OnStepRequested;
+        _hud.ResetRequested += OnResetRequested;
+        _hud.ViewToggleRequested += OnViewToggled;
+
+        GD.Print("[Main] HUD verbunden.");
     }
 
-    // Wird in jedem Frame aufgerufen. Wir nutzen es vorerst nicht aktiv,
-    // implementieren es aber, damit Schüler die Standard-Lifecycle-Hooks sehen.
-    public override void _Process(double delta)
-    {
-        // Bewusst leer. Spätere Phasen reichen das delta an den AlgorithmRunner.
-    }
+    public override void _Process(double delta) { }
 
-    // Wird mit fester Frequenz aufgerufen (Standard 60 Hz, für Physik).
-    // Für unser Projekt nicht zwingend notwendig, der Vollständigkeit halber.
-    public override void _PhysicsProcess(double delta)
-    {
-        // Bewusst leer.
-    }
+    public override void _PhysicsProcess(double delta) { }
 
-    // Letzter Hook vor dem Entfernen aus dem SceneTree. Hier werden später
-    // laufende Coroutinen / Timer / Aufgaben sauber beendet.
-    public override void _ExitTree()
-    {
-        GD.Print("[Main] _ExitTree: Hauptszene wird verlassen.");
-    }
+    public override void _ExitTree() => GD.Print("[Main] _ExitTree.");
+
+    private void OnGenerateRequested(int width, int height, string generatorId) =>
+        GD.Print($"[Main] Generate {generatorId} {width}x{height}");
+
+    private void OnSolveRequested(string solverId) =>
+        GD.Print($"[Main] Solve mit {solverId}");
+
+    private void OnSpeedChanged(float stepsPerSecond) =>
+        GD.Print($"[Main] Tempo: {stepsPerSecond} Schritte/s");
+
+    private void OnPauseToggled(bool paused) =>
+        GD.Print($"[Main] Pause = {paused}");
+
+    private void OnStepRequested() =>
+        GD.Print("[Main] Schritt angefordert");
+
+    private void OnResetRequested() =>
+        GD.Print("[Main] Reset");
+
+    private void OnViewToggled(bool use3D) =>
+        GD.Print($"[Main] 3D-Ansicht = {use3D}");
 }
