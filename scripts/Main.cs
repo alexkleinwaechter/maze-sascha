@@ -15,6 +15,7 @@ public partial class Main : Node
 {
     private Hud _hud = null!;
     private MazeView2D _view2D = null!;
+    private MazeView3D _view3D = null!;
     private AlgorithmRunner _runner = null!;
 
     private Model.Maze _currentMaze = null!;
@@ -33,6 +34,7 @@ public partial class Main : Node
     {
         _hud = GetNode<Hud>("Hud");
         _view2D = GetNode<MazeView2D>("MazeView2D");
+        _view3D = GetNode<MazeView3D>("MazeView3D");
         _runner = GetNode<AlgorithmRunner>("Runner");
 
         // Signale per C#-Eventsyntax abonnieren - typsicher und ohne Magic Strings.
@@ -48,7 +50,10 @@ public partial class Main : Node
         _runner.GenerationFinished += OnGenerationFinished;
         _runner.StepsPerSecond = 30f;
 
-        GD.Print("[Main] HUD, Runner und 2D-View verbunden.");
+        _view2D.Visible = true;
+        _view3D.Visible = false;
+
+        GD.Print("[Main] HUD, Runner, 2D-View und 3D-View verbunden.");
     }
 
     public override void _Process(double delta) { }
@@ -68,6 +73,7 @@ public partial class Main : Node
         _runner.StopAll();
         _currentMaze = new Model.Maze(width, height);
         _view2D.SetMaze(_currentMaze);
+        // 3D-View wird NICHT hier gebaut – erst nach Abschluss der Generierung (OnGenerationFinished).
 
         _runner.StartGeneration(generator.Generate(_currentMaze, _random));
         _runner.IsPaused = false;
@@ -81,6 +87,7 @@ public partial class Main : Node
         var step = _runner.LastGenerationStep;
         step.Cell.State = step.NewState;
         _view2D.Refresh();
+        // 3D NICHT pro Schritt aktualisieren – zu langsam.
     }
 
     private void OnGenerationFinished()
@@ -91,6 +98,8 @@ public partial class Main : Node
             cell.State = CellState.Open;
 
         _view2D.Refresh();
+        // 3D einmalig nach Abschluss der Generierung aufbauen.
+        _view3D.SetMaze(_currentMaze);
         GD.Print("[Main] Generator fertig.");
     }
 
@@ -110,10 +119,19 @@ public partial class Main : Node
     {
         _runner.StopAll();
         _currentMaze = null;
-        _view2D.SetMaze(new Model.Maze(2, 2));
+        var resetMaze = new Model.Maze(2, 2);
+        _view2D.SetMaze(resetMaze);
+        _view3D.SetMaze(resetMaze);
         GD.Print("[Main] Reset.");
     }
 
-    private void OnViewToggled(bool use3D) =>
+    private void OnViewToggled(bool use3D)
+    {
+        _view2D.Visible = !use3D;
+        _view3D.Visible = use3D;
+        // Falls 3D eingeschaltet wird, aber noch kein SetMaze lief (z. B. Reset), sicherstellen.
+        if (use3D && _currentMaze != null)
+            _view3D.SetMaze(_currentMaze);
         GD.Print($"[Main] 3D-Ansicht = {use3D}");
+    }
 }

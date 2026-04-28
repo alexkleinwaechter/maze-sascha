@@ -340,7 +340,7 @@ Erwartet: `Build succeeded`.
 **Files:**
 - Create: `scripts/Maze/CellState.cs`
 
-- [ ] **Step 1: Datei anlegen**
+- [x] **Step 1: Datei anlegen**
 
 ```csharp
 namespace Maze.Model;
@@ -376,7 +376,7 @@ public enum CellState
 **Files:**
 - Create: `scripts/Maze/Cell.cs`
 
-- [ ] **Step 1: Datei anlegen**
+- [x] **Step 1: Datei anlegen**
 
 ```csharp
 namespace Maze.Model;
@@ -2207,7 +2207,7 @@ shadow_enabled = true
 - Modify: `scenes/Main.tscn`
 - Modify: `scripts/Main.cs`
 
-- [ ] **Step 1: `Main.tscn` um 3D-View erweitern**
+- [x] **Step 1: `Main.tscn` um 3D-View erweitern**
 
 ```text
 [gd_scene load_steps=6 format=3 uid="uid://b0maze0main"]
@@ -2231,7 +2231,7 @@ script = ExtResource("4_runner")
 [node name="Hud" parent="." instance=ExtResource("2_hud")]
 ```
 
-- [ ] **Step 2: `Main.cs` View-Toggle implementieren**
+- [x] **Step 2: `Main.cs` View-Toggle implementieren**
 
 In `Main.cs`:
 
@@ -2259,6 +2259,8 @@ private void OnViewToggled(bool use3D)
 ```
 
 > Hinweis: Da `MazeView3D.tscn` mit `visible = false` startet, ist der Default die 2D-Ansicht. Erst Klick auf den Toggle aktiviert 3D.
+
+> **Performance-Hinweis (nachträglich korrigiert):** `MazeView3D.SetMaze()` wird **nicht** in `OnGenerateRequested` und **nicht** in `OnGenerationStepProduced` aufgerufen – das wäre für jeden einzelnen Generierungsschritt zu langsam. Stattdessen wird `_view3D.SetMaze(_currentMaze)` exakt **einmal** in `OnGenerationFinished` aufgerufen, sobald das Maze vollständig ist. In `OnViewToggled` wird zusätzlich `SetMaze` aufgerufen, falls der Nutzer auf 3D umschaltet bevor die View das erste Mal gebaut wurde.
 
 - [ ] **Step 3: Build und Test**
 
