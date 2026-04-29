@@ -73,6 +73,9 @@ step = 1.0
 value = 30.0
 size_flags_horizontal = 3
 
+[node name="UnboundedToggle" type="CheckBox" parent="Root/Margin/VBox/SpeedRow"]
+text = "Ohne Tempolimit"
+
 [node name="Algos" type="HBoxContainer" parent="Root/Margin/VBox"]
 
 [node name="GeneratorChooser" type="OptionButton" parent="Root/Margin/VBox/Algos"]

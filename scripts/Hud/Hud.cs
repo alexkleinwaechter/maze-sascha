@@ -17,6 +17,7 @@ public partial class Hud : CanvasLayer
     [Signal] public delegate void PauseToggleEventHandler(bool paused);
     [Signal] public delegate void StepRequestedEventHandler();
     [Signal] public delegate void ResetRequestedEventHandler();
+    [Signal] public delegate void UnboundedModeChangedEventHandler(bool unbounded);
 
     // ---- Knotenreferenzen (in _Ready aufgeloest) ----
     private HSlider _widthSlider = null!;
@@ -33,6 +34,7 @@ public partial class Hud : CanvasLayer
     private Button _resetButton = null!;
     private CheckBox _viewToggle = null!;
     private CheckBox _heatmapToggle = null!;
+    private CheckBox _unboundedToggle = null!;
     private Label _widthLabel = null!;
     private Label _heightLabel = null!;
     private Label _speedLabel = null!;
@@ -56,6 +58,7 @@ public partial class Hud : CanvasLayer
         _widthLabel = GetNode<Label>("Root/Margin/VBox/Sizes/WidthLabel");
         _heightLabel = GetNode<Label>("Root/Margin/VBox/Sizes/HeightLabel");
         _speedLabel = GetNode<Label>("Root/Margin/VBox/SpeedRow/SpeedLabel");
+        _unboundedToggle = GetNode<CheckBox>("Root/Margin/VBox/SpeedRow/UnboundedToggle");
 
         // ---- Slider-Werte initial sicherstellen ----
         _widthSlider.MinValue = 5;
@@ -102,6 +105,7 @@ public partial class Hud : CanvasLayer
         _resetButton.Pressed += OnResetPressed;
         _viewToggle.Toggled += OnViewToggled;
         _heatmapToggle.Toggled += OnHeatmapToggled;
+        _unboundedToggle.Toggled += OnUnboundedToggled;
 
         FillGeneratorChooser();
         FillSolverChooser();
@@ -132,13 +136,25 @@ public partial class Hud : CanvasLayer
     {
         _widthLabel.Text = $"Breite:  {(int)_widthSlider.Value}";
         _heightLabel.Text = $"Hoehe:    {(int)_heightSlider.Value}";
-        _speedLabel.Text = $"Tempo:  {(int)_speedSlider.Value} Schritte/s";
+
+        if (_unboundedToggle != null && _unboundedToggle.ButtonPressed)
+            _speedLabel.Text = "Tempo:  ungebremst";
+        else
+            _speedLabel.Text = $"Tempo:  {(int)_speedSlider.Value} Schritte/s";
     }
 
     private void OnSpeedChanged(double value)
     {
         UpdateLabels();
         EmitSignal(SignalName.SpeedChanged, (float)value);
+    }
+
+    private void OnUnboundedToggled(bool pressed)
+    {
+        // Slider visuell ausgrauen, damit klar ist, dass StepsPerSecond ignoriert wird.
+        _speedSlider.Editable = !pressed;
+        UpdateLabels();
+        EmitSignal(SignalName.UnboundedModeChanged, pressed);
     }
 
     private void OnGeneratePressed()
