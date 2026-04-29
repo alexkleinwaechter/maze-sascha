@@ -2337,6 +2337,8 @@ using Maze.Solvers;
 // ...
 
 private readonly Dictionary<string, IMazeSolver> _solvers = new();
+private Cell _solverStart = null!;
+private Cell _solverGoal  = null!;
 
 // in _Ready():
 _runner.SolverStepProduced += OnSolverStepProduced;
@@ -2353,22 +2355,27 @@ private void OnSolveRequested(string solverId)
     }
 
     _currentMaze.ResetSolverState();
-    Cell start = _currentMaze.GetCell(0, 0);
-    Cell goal  = _currentMaze.GetCell(_currentMaze.Width - 1, _currentMaze.Height - 1);
-    start.State = CellState.Start;
-    goal.State  = CellState.Goal;
+    _solverStart = _currentMaze.GetCell(0, 0);
+    _solverGoal  = _currentMaze.GetCell(_currentMaze.Width - 1, _currentMaze.Height - 1);
+    _solverStart.State = CellState.Start;
+    _solverGoal.State  = CellState.Goal;
     _view2D.Refresh();
     _view3D.Refresh();
 
     _runner.StopAll();
-    _runner.StartSolver(solver.Solve(_currentMaze, start, goal));
+    _runner.StartSolver(solver.Solve(_currentMaze, _solverStart, _solverGoal));
 }
 
 private void OnSolverStepProduced()
 {
     var step = _runner.LastSolverStep;
     if (step is null) return;
-    step.Cell.State    = step.NewState;
+    if (step.Cell == _solverStart)
+        step.Cell.State = CellState.Start;
+    else if (step.Cell == _solverGoal)
+        step.Cell.State = CellState.Goal;
+    else
+        step.Cell.State = step.NewState;
     step.Cell.Distance = step.Distance;
     _view2D.Refresh();
 }
@@ -2381,6 +2388,8 @@ private void OnSolverFinished()
 ```
 
 > Damit der Solver-Toggle die View nicht mit Carving-Resten überschreibt, ruft `OnSolveRequested` `ResetSolverState` auf — Generation-Wände bleiben dabei erhalten.
+>
+> Wichtiger lokaler Befund: `Main` schreibt jeden Solver-Schritt direkt in `step.Cell.State`. Ohne die zusätzlichen Felder `_solverStart` und `_solverGoal` würden Start- und Zielzelle bei einem naiv implementierten Solver schon beim ersten Frontier-/Visited-/Path-Schritt ihre Markierung verlieren. Die Visualisierung muss diese beiden Endpunkte deshalb in `OnSolverStepProduced` explizit stabil halten.
 
 ---
 
@@ -2389,6 +2398,8 @@ private void OnSolverFinished()
 Sechs Algorithmen — die "kuratierte Auswahl" aus dem Briefing.
 
 ### Task 9.1: Breadth-First Search
+
+> BFS ist die erste Stelle, an der diese Falle sichtbar wird: Der Algorithmus arbeitet korrekt, aber die Anzeige wäre irreführend, wenn `Main` die Endpunkte nicht separat schützt. Daher gehört die Endpunkt-Stabilisierung aus Phase 8 zur praktischen Voraussetzung dieses Tasks.
 
 **Files:**
 - Create: `scripts/Solvers/BreadthFirstSolver.cs`

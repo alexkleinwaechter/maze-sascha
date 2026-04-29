@@ -29,7 +29,12 @@ public partial class Main : Node
         ["cellular-automata"] = new CellularAutomataGenerator()
     };
 
-    private readonly Dictionary<string, IMazeSolver> _solvers = new();
+    private readonly Dictionary<string, IMazeSolver> _solvers = new()
+    {
+        ["bfs"] = new BreadthFirstSolver()
+    };
+    private Cell _solverStart = null!;
+    private Cell _solverGoal = null!;
 
     private readonly Random _random = new();
 
@@ -124,16 +129,16 @@ public partial class Main : Node
 
         _currentMaze.ResetSolverState();
 
-        Cell start = _currentMaze.GetCell(0, 0);
-        Cell goal = _currentMaze.GetCell(_currentMaze.Width - 1, _currentMaze.Height - 1);
-        start.State = CellState.Start;
-        goal.State = CellState.Goal;
+        _solverStart = _currentMaze.GetCell(0, 0);
+        _solverGoal = _currentMaze.GetCell(_currentMaze.Width - 1, _currentMaze.Height - 1);
+        _solverStart.State = CellState.Start;
+        _solverGoal.State = CellState.Goal;
 
         _view2D.Refresh();
         _view3D.Refresh();
 
         _runner.StopAll();
-        _runner.StartSolver(solver.Solve(_currentMaze, start, goal));
+        _runner.StartSolver(solver.Solve(_currentMaze, _solverStart, _solverGoal));
         _runner.IsPaused = false;
         GD.Print($"[Main] Solver gestartet: {solver.Name}");
     }
@@ -144,7 +149,13 @@ public partial class Main : Node
         if (step == null)
             return;
 
-        step.Cell.State = step.NewState;
+        if (step.Cell == _solverStart)
+            step.Cell.State = CellState.Start;
+        else if (step.Cell == _solverGoal)
+            step.Cell.State = CellState.Goal;
+        else
+            step.Cell.State = step.NewState;
+
         step.Cell.Distance = step.Distance;
         _view2D.Refresh();
     }
@@ -169,6 +180,8 @@ public partial class Main : Node
     {
         _runner.StopAll();
         _currentMaze = null;
+        _solverStart = null!;
+        _solverGoal = null!;
         var resetMaze = new Model.Maze(2, 2);
         _view2D.SetMaze(resetMaze);
         _view3D.SetMaze(resetMaze);
