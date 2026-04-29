@@ -128,7 +128,7 @@ public partial class Main : Node
         foreach (var cell in _currentMaze.AllCells())
             cell.State = CellState.Open;
 
-        _view2D.Refresh();
+        _view2D.ForceRefresh();
         // 3D einmalig nach Abschluss der Generierung aufbauen.
         _view3D.SetMaze(_currentMaze);
         _tracker.Stop();
@@ -195,7 +195,7 @@ public partial class Main : Node
 
     private void OnSolverFinished()
     {
-        _view2D.Refresh();
+        _view2D.ForceRefresh();
         _view3D.Refresh();
         _tracker.Stop();
         _stats.UpdateStats(_tracker.Elapsed, _tracker.Steps, _tracker.VisitedCells, _tracker.PathLength, _tracker.ManagedMemoryDeltaBytes);

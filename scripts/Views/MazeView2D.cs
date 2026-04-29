@@ -33,6 +33,15 @@ public partial class MazeView2D : Node2D
     private static readonly Color HeatmapMin = new("#003366");
     private static readonly Color HeatmapMax = new("#ff6f3c");
 
+    // Ab dieser Maze-Groesse pro Achse schaltet die View vom Pro-Schritt-Refresh
+    // auf zeitbasiertes Throttling um. Animation bleibt fluessig, aber die Anzahl
+    // der Neuzeichnungen ist von der Schrittfrequenz entkoppelt.
+    private const int ThrottleThreshold = 250;
+    private const double ThrottledRefreshHz = 30.0;
+
+    private bool _refreshDirty;
+    private double _refreshAccumulator;
+
     private Maze.Model.Maze _maze = null!;
 
     /// <summary>Setzt das aktuelle Maze und loest Neuzeichnung aus.</summary>
@@ -42,8 +51,43 @@ public partial class MazeView2D : Node2D
         QueueRedraw();
     }
 
-    /// <summary>Erzwingt eine Neuzeichnung - wird nach jedem Algorithmus-Schritt aufgerufen.</summary>
-    public void Refresh() => QueueRedraw();
+    /// <summary>
+    /// Wird nach jedem Algorithmus-Schritt aufgerufen. Bei kleinen Mazes loest die
+    /// Methode sofort eine Neuzeichnung aus, bei grossen Mazes nur ein Dirty-Flag,
+    /// das im naechsten _Process zeitbasiert eingeloest wird.
+    /// </summary>
+    public void Refresh()
+    {
+        if (_maze == null) return;
+        if (_maze.Width <= ThrottleThreshold && _maze.Height <= ThrottleThreshold)
+            QueueRedraw();
+        else
+            _refreshDirty = true;
+    }
+
+    /// <summary>
+    /// Erzwingt eine sofortige Neuzeichnung, unabhaengig vom Throttling.
+    /// Wird am Ende von Generierung/Loesung verwendet, damit der Endzustand
+    /// sicher sichtbar ist.
+    /// </summary>
+    public void ForceRefresh()
+    {
+        _refreshDirty = false;
+        _refreshAccumulator = 0;
+        QueueRedraw();
+    }
+
+    public override void _Process(double delta)
+    {
+        if (!_refreshDirty) return;
+        _refreshAccumulator += delta;
+        if (_refreshAccumulator >= 1.0 / ThrottledRefreshHz)
+        {
+            _refreshAccumulator = 0;
+            _refreshDirty = false;
+            QueueRedraw();
+        }
+    }
 
     public override void _Draw()
     {
