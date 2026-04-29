@@ -16,6 +16,18 @@ public partial class AlgorithmRunner : Node
     [Signal] public delegate void GenerationFinishedEventHandler();
     [Signal] public delegate void SolverFinishedEventHandler();
 
+    /// <summary>
+    /// Throttled = Schritte werden ueber StepsPerSecond getaktet.
+    /// Unbounded = Schritte werden in einem Frame komplett abgearbeitet.
+    /// </summary>
+    public enum RunMode
+    {
+        Throttled,
+        Unbounded
+    }
+
+    public RunMode Mode { get; set; } = RunMode.Throttled;
+
     public float StepsPerSecond { get; set; } = 30f;
     public bool IsPaused { get; set; }
     public bool IsRunning => _genIterator != null || _solverIterator != null;
@@ -68,6 +80,12 @@ public partial class AlgorithmRunner : Node
     {
         if (IsPaused || !IsRunning) return;
 
+        if (Mode == RunMode.Unbounded)
+        {
+            DrainAllInOneFrame();
+            return;
+        }
+
         _accumulator += delta;
         double secondsPerStep = 1.0 / Mathf.Max(1f, StepsPerSecond);
 
@@ -88,6 +106,19 @@ public partial class AlgorithmRunner : Node
                 continue;
             }
         }
+    }
+
+    /// <summary>
+    /// Im Unbounded-Modus aufgerufen: drained den aktuellen Iterator komplett in einem Frame.
+    /// AdvanceGenerator/AdvanceSolver setzen den Iterator beim Ende selbst auf null und
+    /// emittieren das jeweilige Finished-Signal - dadurch terminieren die while-Schleifen.
+    /// </summary>
+    private void DrainAllInOneFrame()
+    {
+        while (_genIterator != null)
+            AdvanceGenerator();
+        while (_solverIterator != null)
+            AdvanceSolver();
     }
 
     private void AdvanceGenerator()
