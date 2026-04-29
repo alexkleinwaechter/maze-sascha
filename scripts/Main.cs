@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Godot;
 using Maze.Generators;
 using Maze.Model;
+using Maze.Solvers;
 using Maze.UI;
 using Maze.Views;
 
@@ -28,6 +29,8 @@ public partial class Main : Node
         ["cellular-automata"] = new CellularAutomataGenerator()
     };
 
+    private readonly Dictionary<string, IMazeSolver> _solvers = new();
+
     private readonly Random _random = new();
 
     public override void _Ready()
@@ -48,6 +51,8 @@ public partial class Main : Node
 
         _runner.GenerationStepProduced += OnGenerationStepProduced;
         _runner.GenerationFinished += OnGenerationFinished;
+        _runner.SolverStepProduced += OnSolverStepProduced;
+        _runner.SolverFinished += OnSolverFinished;
         _runner.StepsPerSecond = 30f;
 
         _view2D.Visible = true;
@@ -103,8 +108,53 @@ public partial class Main : Node
         GD.Print("[Main] Generator fertig.");
     }
 
-    private void OnSolveRequested(string solverId) =>
-        GD.Print($"[Main] Solve mit {solverId} (folgt in spaeterer Phase)");
+    private void OnSolveRequested(string solverId)
+    {
+        if (_currentMaze == null)
+        {
+            GD.PrintErr("[Main] Kein Maze zum Loesen vorhanden.");
+            return;
+        }
+
+        if (!_solvers.TryGetValue(solverId, out var solver))
+        {
+            GD.PrintErr($"[Main] Unbekannter Solver: {solverId}");
+            return;
+        }
+
+        _currentMaze.ResetSolverState();
+
+        Cell start = _currentMaze.GetCell(0, 0);
+        Cell goal = _currentMaze.GetCell(_currentMaze.Width - 1, _currentMaze.Height - 1);
+        start.State = CellState.Start;
+        goal.State = CellState.Goal;
+
+        _view2D.Refresh();
+        _view3D.Refresh();
+
+        _runner.StopAll();
+        _runner.StartSolver(solver.Solve(_currentMaze, start, goal));
+        _runner.IsPaused = false;
+        GD.Print($"[Main] Solver gestartet: {solver.Name}");
+    }
+
+    private void OnSolverStepProduced()
+    {
+        var step = _runner.LastSolverStep;
+        if (step == null)
+            return;
+
+        step.Cell.State = step.NewState;
+        step.Cell.Distance = step.Distance;
+        _view2D.Refresh();
+    }
+
+    private void OnSolverFinished()
+    {
+        _view2D.Refresh();
+        _view3D.Refresh();
+        GD.Print("[Main] Solver fertig.");
+    }
 
     private void OnSpeedChanged(float stepsPerSecond) =>
         _runner.StepsPerSecond = stepsPerSecond;
