@@ -61,6 +61,7 @@ public partial class Main : Node
         _hud.StepRequested += OnStepRequested;
         _hud.ResetRequested += OnResetRequested;
         _hud.ViewToggleRequested += OnViewToggled;
+        _hud.HeatmapToggle += OnHeatmapToggled;
 
         _runner.GenerationStepProduced += OnGenerationStepProduced;
         _runner.GenerationFinished += OnGenerationFinished;
@@ -77,6 +78,12 @@ public partial class Main : Node
     public override void _Process(double delta) { }
 
     public override void _PhysicsProcess(double delta) { }
+
+    public override void _UnhandledInput(InputEvent @event)
+    {
+        if (@event is InputEventKey { Pressed: true, Keycode: Key.Space } && _runner.IsPaused)
+            _runner.ForceSingleStep();
+    }
 
     public override void _ExitTree() => GD.Print("[Main] _ExitTree.");
 
@@ -224,5 +231,11 @@ public partial class Main : Node
         if (use3D && _currentMaze != null)
             _view3D.SetMaze(_currentMaze);
         GD.Print($"[Main] 3D-Ansicht = {use3D}");
+    }
+
+    private void OnHeatmapToggled(bool enabled)
+    {
+        _view2D.ShowDistances = enabled;
+        _view2D.Refresh();
     }
 }

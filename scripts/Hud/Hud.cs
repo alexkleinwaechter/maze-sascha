@@ -13,6 +13,7 @@ public partial class Hud : CanvasLayer
     [Signal] public delegate void SolveRequestedEventHandler(string solverId);
     [Signal] public delegate void SpeedChangedEventHandler(float stepsPerSecond);
     [Signal] public delegate void ViewToggleRequestedEventHandler(bool use3D);
+    [Signal] public delegate void HeatmapToggleEventHandler(bool enabled);
     [Signal] public delegate void PauseToggleEventHandler(bool paused);
     [Signal] public delegate void StepRequestedEventHandler();
     [Signal] public delegate void ResetRequestedEventHandler();
@@ -29,6 +30,7 @@ public partial class Hud : CanvasLayer
     private Button _stepButton = null!;
     private Button _resetButton = null!;
     private CheckBox _viewToggle = null!;
+    private CheckBox _heatmapToggle = null!;
     private Label _widthLabel = null!;
     private Label _heightLabel = null!;
     private Label _speedLabel = null!;
@@ -46,6 +48,7 @@ public partial class Hud : CanvasLayer
         _stepButton = GetNode<Button>("Root/Margin/VBox/Buttons/StepButton");
         _resetButton = GetNode<Button>("Root/Margin/VBox/Buttons/ResetButton");
         _viewToggle = GetNode<CheckBox>("Root/Margin/VBox/Algos/View3DToggle");
+        _heatmapToggle = GetNode<CheckBox>("Root/Margin/VBox/Algos/HeatmapToggle");
         _widthLabel = GetNode<Label>("Root/Margin/VBox/Sizes/WidthLabel");
         _heightLabel = GetNode<Label>("Root/Margin/VBox/Sizes/HeightLabel");
         _speedLabel = GetNode<Label>("Root/Margin/VBox/SpeedRow/SpeedLabel");
@@ -78,6 +81,7 @@ public partial class Hud : CanvasLayer
         _stepButton.Pressed += OnStepPressed;
         _resetButton.Pressed += OnResetPressed;
         _viewToggle.Toggled += OnViewToggled;
+        _heatmapToggle.Toggled += OnHeatmapToggled;
 
         FillGeneratorChooser();
         FillSolverChooser();
@@ -123,6 +127,11 @@ public partial class Hud : CanvasLayer
     private void OnViewToggled(bool pressed)
     {
         EmitSignal(SignalName.ViewToggleRequested, pressed);
+    }
+
+    private void OnHeatmapToggled(bool enabled)
+    {
+        EmitSignal(SignalName.HeatmapToggle, enabled);
     }
 
     private void FillGeneratorChooser()
