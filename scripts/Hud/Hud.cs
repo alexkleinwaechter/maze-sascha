@@ -67,6 +67,9 @@ public partial class Hud : CanvasLayer
         _widthSpinBox.MaxValue = 1000;
         _widthSpinBox.Step = 1;
         _widthSpinBox.Value = 25;
+        // Sofortiges Mitziehen des Sliders waehrend der Tastatureingabe,
+        // sonst feuert ValueChanged erst bei Enter oder Fokusverlust.
+        _widthSpinBox.UpdateOnTextChanged = true;
 
         _heightSlider.MinValue = 5;
         _heightSlider.MaxValue = 1000;
@@ -77,6 +80,9 @@ public partial class Hud : CanvasLayer
         _heightSpinBox.MaxValue = 1000;
         _heightSpinBox.Step = 1;
         _heightSpinBox.Value = 25;
+        // Sofortiges Mitziehen des Sliders waehrend der Tastatureingabe,
+        // sonst feuert ValueChanged erst bei Enter oder Fokusverlust.
+        _heightSpinBox.UpdateOnTextChanged = true;
 
         _speedSlider.MinValue = 1;
         _speedSlider.MaxValue = 240;
@@ -86,28 +92,8 @@ public partial class Hud : CanvasLayer
         UpdateLabels();
 
         // ---- Signal-Wiring (C#-Eventsyntax) ----
-        _widthSlider.ValueChanged += v =>
-        {
-            // SetValueNoSignal verhindert eine Endlosschleife zurueck zum Slider.
-            _widthSpinBox.SetValueNoSignal(v);
-            UpdateLabels();
-        };
-        _widthSpinBox.ValueChanged += v =>
-        {
-            _widthSlider.SetValueNoSignal(v);
-            UpdateLabels();
-        };
-
-        _heightSlider.ValueChanged += v =>
-        {
-            _heightSpinBox.SetValueNoSignal(v);
-            UpdateLabels();
-        };
-        _heightSpinBox.ValueChanged += v =>
-        {
-            _heightSlider.SetValueNoSignal(v);
-            UpdateLabels();
-        };
+        LinkRange(_widthSlider, _widthSpinBox);
+        LinkRange(_heightSlider, _heightSpinBox);
         _speedSlider.ValueChanged += OnSpeedChanged;
         _generateButton.Pressed += OnGeneratePressed;
         _solveButton.Pressed += OnSolvePressed;
@@ -119,6 +105,27 @@ public partial class Hud : CanvasLayer
 
         FillGeneratorChooser();
         FillSolverChooser();
+    }
+
+    /// <summary>
+    /// Koppelt einen Slider und eine SpinBox bidirektional, sodass beide Knoten denselben Wert zeigen.
+    /// SetValueNoSignal vermeidet, dass der Partner sein eigenes ValueChanged-Signal feuert
+    /// und so eine Endlosschleife entsteht.
+    /// </summary>
+    private void LinkRange(Range slider, Range spin)
+    {
+        slider.ValueChanged += v =>
+        {
+            // Spiegelt den Wert auf den Partner-Knoten, ohne dessen ValueChanged erneut auszuloesen.
+            spin.SetValueNoSignal(v);
+            UpdateLabels();
+        };
+        spin.ValueChanged += v =>
+        {
+            // Spiegelt den Wert auf den Partner-Knoten, ohne dessen ValueChanged erneut auszuloesen.
+            slider.SetValueNoSignal(v);
+            UpdateLabels();
+        };
     }
 
     private void UpdateLabels()
