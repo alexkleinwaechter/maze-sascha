@@ -34,7 +34,8 @@ public partial class Main : Node
         ["bfs"] = new BreadthFirstSolver(),
         ["dfs"] = new DepthFirstSolver(),
         ["a-star"] = new AStarSolver(),
-        ["greedy"] = new GreedyBestFirstSolver()
+        ["greedy"] = new GreedyBestFirstSolver(),
+        ["wall-follower"] = new WallFollowerSolver()
     };
     private Cell _solverStart = null!;
     private Cell _solverGoal = null!;
