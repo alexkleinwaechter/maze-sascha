@@ -88,7 +88,7 @@ public partial class Hud : CanvasLayer
         _heightSpinBox.UpdateOnTextChanged = true;
 
         _speedSlider.MinValue = 1;
-        _speedSlider.MaxValue = 240;
+        _speedSlider.MaxValue = 500;
         _speedSlider.Step = 1;
         _speedSlider.Value = 30;
 
