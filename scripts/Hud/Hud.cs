@@ -21,6 +21,8 @@ public partial class Hud : CanvasLayer
     // ---- Knotenreferenzen (in _Ready aufgeloest) ----
     private HSlider _widthSlider = null!;
     private HSlider _heightSlider = null!;
+    private SpinBox _widthSpinBox = null!;
+    private SpinBox _heightSpinBox = null!;
     private HSlider _speedSlider = null!;
     private OptionButton _generatorChooser = null!;
     private OptionButton _solverChooser = null!;
@@ -39,6 +41,8 @@ public partial class Hud : CanvasLayer
     {
         _widthSlider = GetNode<HSlider>("Root/Margin/VBox/Sizes/WidthSlider");
         _heightSlider = GetNode<HSlider>("Root/Margin/VBox/Sizes/HeightSlider");
+        _widthSpinBox = GetNode<SpinBox>("Root/Margin/VBox/Sizes/WidthSpinBox");
+        _heightSpinBox = GetNode<SpinBox>("Root/Margin/VBox/Sizes/HeightSpinBox");
         _speedSlider = GetNode<HSlider>("Root/Margin/VBox/SpeedRow/SpeedSlider");
         _generatorChooser = GetNode<OptionButton>("Root/Margin/VBox/Algos/GeneratorChooser");
         _solverChooser = GetNode<OptionButton>("Root/Margin/VBox/Algos/SolverChooser");
@@ -55,14 +59,24 @@ public partial class Hud : CanvasLayer
 
         // ---- Slider-Werte initial sicherstellen ----
         _widthSlider.MinValue = 5;
-        _widthSlider.MaxValue = 75;
+        _widthSlider.MaxValue = 1000;
         _widthSlider.Step = 1;
         _widthSlider.Value = 25;
 
+        _widthSpinBox.MinValue = 5;
+        _widthSpinBox.MaxValue = 1000;
+        _widthSpinBox.Step = 1;
+        _widthSpinBox.Value = 25;
+
         _heightSlider.MinValue = 5;
-        _heightSlider.MaxValue = 75;
+        _heightSlider.MaxValue = 1000;
         _heightSlider.Step = 1;
         _heightSlider.Value = 25;
+
+        _heightSpinBox.MinValue = 5;
+        _heightSpinBox.MaxValue = 1000;
+        _heightSpinBox.Step = 1;
+        _heightSpinBox.Value = 25;
 
         _speedSlider.MinValue = 1;
         _speedSlider.MaxValue = 240;
@@ -72,8 +86,28 @@ public partial class Hud : CanvasLayer
         UpdateLabels();
 
         // ---- Signal-Wiring (C#-Eventsyntax) ----
-        _widthSlider.ValueChanged += _ => UpdateLabels();
-        _heightSlider.ValueChanged += _ => UpdateLabels();
+        _widthSlider.ValueChanged += v =>
+        {
+            // SetValueNoSignal verhindert eine Endlosschleife zurueck zum Slider.
+            _widthSpinBox.SetValueNoSignal(v);
+            UpdateLabels();
+        };
+        _widthSpinBox.ValueChanged += v =>
+        {
+            _widthSlider.SetValueNoSignal(v);
+            UpdateLabels();
+        };
+
+        _heightSlider.ValueChanged += v =>
+        {
+            _heightSpinBox.SetValueNoSignal(v);
+            UpdateLabels();
+        };
+        _heightSpinBox.ValueChanged += v =>
+        {
+            _heightSlider.SetValueNoSignal(v);
+            UpdateLabels();
+        };
         _speedSlider.ValueChanged += OnSpeedChanged;
         _generateButton.Pressed += OnGeneratePressed;
         _solveButton.Pressed += OnSolvePressed;
