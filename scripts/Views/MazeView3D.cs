@@ -40,6 +40,12 @@ public partial class MazeView3D : Node3D
         // damit die Farbe zentral hier gesetzt werden kann.
         _wallsHorizontal.MaterialOverride = WallMaterial;
         _wallsVertical.MaterialOverride = WallMaterial;
+
+        // BoxMesh-Groessen aus den [Export]-Werten neu setzen, damit die Wandgeometrie
+        // den C#-Werten folgt - die in der .tscn voreingestellten Groessen sind nur
+        // Editor-Platzhalter.
+        ((BoxMesh)_wallsHorizontal.Multimesh.Mesh).Size = new Vector3(CellSize, WallHeight, WallThickness);
+        ((BoxMesh)_wallsVertical.Multimesh.Mesh).Size = new Vector3(WallThickness, WallHeight, CellSize);
     }
 
     public void SetMaze(Model.Maze maze)
@@ -78,10 +84,11 @@ public partial class MazeView3D : Node3D
     /// </summary>
     private void BuildWalls(Model.Maze maze)
     {
-        // Maximalkapazitaet grosszuegig dimensionieren: jede Zelle kann ihre Nord/West-Wand
-        // beitragen, plus jeweils eine Reihe Sued- und Ost-Wand am Rand.
-        int maxHorizontal = maze.Width * maze.Height + maze.Width;
-        int maxVertical = maze.Width * maze.Height + maze.Height;
+        // Maximalkapazitaet exakt dimensionieren: horizontale Waende = Width * (Height+1)
+        // (Nord-Kanten aller Zellen plus die Sued-Randreihe), vertikale entsprechend
+        // (Width+1) * Height.
+        int maxHorizontal = maze.Width * (maze.Height + 1);
+        int maxVertical = (maze.Width + 1) * maze.Height;
 
         var horizontal = _wallsHorizontal.Multimesh;
         var vertical = _wallsVertical.Multimesh;
@@ -116,6 +123,9 @@ public partial class MazeView3D : Node3D
         vertical.VisibleInstanceCount = vi;
     }
 
+    // Beide BoxMeshes sind in der Szene bereits korrekt orientiert (horizontal vs. vertikal),
+    // daher reicht hier eine reine Translation - die Helper-Methoden bleiben getrennt,
+    // damit der Aufrufer am Methodennamen erkennt, in welchen Bucket geschrieben wird.
     private Transform3D HorizontalWallTransform(float centerX, float centerZ) =>
         new(Basis.Identity, new Vector3(centerX, WallHeight / 2f, centerZ));
 
