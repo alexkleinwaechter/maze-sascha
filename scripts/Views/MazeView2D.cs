@@ -38,6 +38,7 @@ public partial class MazeView2D : Node2D
     // der Neuzeichnungen ist von der Schrittfrequenz entkoppelt.
     private const int ThrottleThreshold = 250;
     private const double ThrottledRefreshHz = 30.0;
+    private const double ThrottledRefreshPeriod = 1.0 / ThrottledRefreshHz;
 
     private bool _refreshDirty;
     private double _refreshAccumulator;
@@ -81,9 +82,11 @@ public partial class MazeView2D : Node2D
     {
         if (!_refreshDirty) return;
         _refreshAccumulator += delta;
-        if (_refreshAccumulator >= 1.0 / ThrottledRefreshHz)
+        if (_refreshAccumulator >= ThrottledRefreshPeriod)
         {
-            _refreshAccumulator = 0;
+            // Periode abziehen (statt auf 0 setzen), damit die fraktionale Restzeit
+            // erhalten bleibt - sonst driftet die Refresh-Rate bei variablen Frameraten.
+            _refreshAccumulator -= ThrottledRefreshPeriod;
             _refreshDirty = false;
             QueueRedraw();
         }
