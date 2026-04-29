@@ -1,6 +1,20 @@
-[gd_scene load_steps=2 format=3 uid="uid://b0maze0view3d"]
+[gd_scene load_steps=5 format=3 uid="uid://b0maze0view3d"]
 
 [ext_resource type="Script" path="res://scripts/Views/MazeView3D.cs" id="1_view3d"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_horizontal"]
+size = Vector3(1, 1.4, 0.1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_vertical"]
+size = Vector3(0.1, 1.4, 1)
+
+[sub_resource type="MultiMesh" id="MultiMesh_horizontal"]
+transform_format = 1
+mesh = SubResource("BoxMesh_horizontal")
+
+[sub_resource type="MultiMesh" id="MultiMesh_vertical"]
+transform_format = 1
+mesh = SubResource("BoxMesh_vertical")
 
 [node name="MazeView3D" type="Node3D"]
 visible = false
@@ -17,3 +31,9 @@ shadow_enabled = true
 [node name="Floor" type="MeshInstance3D" parent="."]
 
 [node name="WallContainer" type="Node3D" parent="."]
+
+[node name="WallsHorizontal" type="MultiMeshInstance3D" parent="WallContainer"]
+multimesh = SubResource("MultiMesh_horizontal")
+
+[node name="WallsVertical" type="MultiMeshInstance3D" parent="WallContainer"]
+multimesh = SubResource("MultiMesh_vertical")

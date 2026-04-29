@@ -15,6 +15,8 @@ public partial class MazeView3D : Node3D
 
     private Node3D _wallContainer = null!;
     private MeshInstance3D _floor = null!;
+    private MultiMeshInstance3D _wallsHorizontal = null!;
+    private MultiMeshInstance3D _wallsVertical = null!;
     private Model.Maze _maze = null!;
 
     private static readonly StandardMaterial3D WallMaterial = new()
@@ -31,6 +33,13 @@ public partial class MazeView3D : Node3D
     {
         _wallContainer = GetNode<Node3D>("WallContainer");
         _floor = GetNode<MeshInstance3D>("Floor");
+        _wallsHorizontal = GetNode<MultiMeshInstance3D>("WallContainer/WallsHorizontal");
+        _wallsVertical = GetNode<MultiMeshInstance3D>("WallContainer/WallsVertical");
+
+        // Material zuweisen - die in der .tscn voreingestellten BoxMeshes haben bewusst kein Material,
+        // damit die Farbe zentral hier gesetzt werden kann.
+        _wallsHorizontal.MaterialOverride = WallMaterial;
+        _wallsVertical.MaterialOverride = WallMaterial;
     }
 
     public void SetMaze(Model.Maze maze)
@@ -47,18 +56,11 @@ public partial class MazeView3D : Node3D
 
     private void Rebuild()
     {
-        ClearWalls();
         if (_maze == null)
             return;
 
         BuildFloor(_maze);
         BuildWalls(_maze);
-    }
-
-    private void ClearWalls()
-    {
-        foreach (Node child in _wallContainer.GetChildren())
-            child.QueueFree();
     }
 
     private void BuildFloor(Model.Maze maze)
@@ -69,32 +71,54 @@ public partial class MazeView3D : Node3D
         _floor.Position = new Vector3(maze.Width * CellSize / 2f, -0.025f, maze.Height * CellSize / 2f);
     }
 
+    /// <summary>
+    /// Schreibt fuer jede Wand des Mazes eine Transformations-Matrix in eines der zwei
+    /// MultiMesh-Buckets (horizontal = Nord/Sued, vertikal = Ost/West). Beide MultiMeshes
+    /// teilen sich jeweils ein BoxMesh; die GPU rendert alle Instanzen in einem Draw-Call.
+    /// </summary>
     private void BuildWalls(Model.Maze maze)
     {
+        // Maximalkapazitaet grosszuegig dimensionieren: jede Zelle kann ihre Nord/West-Wand
+        // beitragen, plus jeweils eine Reihe Sued- und Ost-Wand am Rand.
+        int maxHorizontal = maze.Width * maze.Height + maze.Width;
+        int maxVertical = maze.Width * maze.Height + maze.Height;
+
+        var horizontal = _wallsHorizontal.Multimesh;
+        var vertical = _wallsVertical.Multimesh;
+
+        horizontal.InstanceCount = maxHorizontal;
+        vertical.InstanceCount = maxVertical;
+
+        int hi = 0;
+        int vi = 0;
+
         for (int y = 0; y < maze.Height; y++)
         for (int x = 0; x < maze.Width; x++)
         {
             Cell cell = maze.GetCell(x, y);
+
             if (cell.HasWall(Direction.North))
-                AddWall(x * CellSize + CellSize / 2f, y * CellSize, CellSize, WallThickness);
+                horizontal.SetInstanceTransform(hi++, HorizontalWallTransform(x * CellSize + CellSize / 2f, y * CellSize));
+
             if (cell.HasWall(Direction.West))
-                AddWall(x * CellSize, y * CellSize + CellSize / 2f, WallThickness, CellSize);
+                vertical.SetInstanceTransform(vi++, VerticalWallTransform(x * CellSize, y * CellSize + CellSize / 2f));
+
             if (y == maze.Height - 1 && cell.HasWall(Direction.South))
-                AddWall(x * CellSize + CellSize / 2f, (y + 1) * CellSize, CellSize, WallThickness);
+                horizontal.SetInstanceTransform(hi++, HorizontalWallTransform(x * CellSize + CellSize / 2f, (y + 1) * CellSize));
+
             if (x == maze.Width - 1 && cell.HasWall(Direction.East))
-                AddWall((x + 1) * CellSize, y * CellSize + CellSize / 2f, WallThickness, CellSize);
+                vertical.SetInstanceTransform(vi++, VerticalWallTransform((x + 1) * CellSize, y * CellSize + CellSize / 2f));
         }
+
+        // VisibleInstanceCount sorgt dafuer, dass nur die tatsaechlich befuellten Slots
+        // gerendert werden - nicht das InstanceCount-Maximum.
+        horizontal.VisibleInstanceCount = hi;
+        vertical.VisibleInstanceCount = vi;
     }
 
-    private void AddWall(float centerX, float centerZ, float lengthX, float lengthZ)
-    {
-        var instance = new MeshInstance3D
-        {
-            Mesh = new BoxMesh { Size = new Vector3(lengthX, WallHeight, lengthZ) },
-            MaterialOverride = WallMaterial,
-            Position = new Vector3(centerX, WallHeight / 2f, centerZ)
-        };
+    private Transform3D HorizontalWallTransform(float centerX, float centerZ) =>
+        new(Basis.Identity, new Vector3(centerX, WallHeight / 2f, centerZ));
 
-        _wallContainer.AddChild(instance);
-    }
+    private Transform3D VerticalWallTransform(float centerX, float centerZ) =>
+        new(Basis.Identity, new Vector3(centerX, WallHeight / 2f, centerZ));
 }
