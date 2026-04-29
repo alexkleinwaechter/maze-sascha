@@ -1,0 +1,35 @@
+[gd_scene load_steps=2 format=3 uid="uid://b0maze0stats"]
+
+[ext_resource type="Script" path="res://scripts/Hud/StatsPanel.cs" id="1_stats"]
+
+[node name="StatsPanel" type="PanelContainer"]
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -260.0
+offset_top = -160.0
+script = ExtResource("1_stats")
+
+[node name="Margin" type="MarginContainer" parent="."]
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 8
+
+[node name="VBox" type="VBoxContainer" parent="Margin"]
+
+[node name="TimeLabel" type="Label" parent="Margin/VBox"]
+text = "Zeit: -"
+
+[node name="StepsLabel" type="Label" parent="Margin/VBox"]
+text = "Schritte: -"
+
+[node name="VisitedLabel" type="Label" parent="Margin/VBox"]
+text = "Besucht: -"
+
+[node name="PathLabel" type="Label" parent="Margin/VBox"]
+text = "Pfadlaenge: -"
+
+[node name="MemoryLabel" type="Label" parent="Margin/VBox"]
+text = "Speicher: -"

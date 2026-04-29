@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3 uid="uid://b0maze0hud"]
+[gd_scene load_steps=3 format=3 uid="uid://b0maze0hud"]
 
 [ext_resource type="Script" path="res://scripts/Hud/Hud.cs" id="1_hud"]
+[ext_resource type="PackedScene" path="res://scenes/StatsPanel.tscn" id="2_stats"]
 
 [node name="Hud" type="CanvasLayer"]
 script = ExtResource("1_hud")
@@ -80,3 +81,5 @@ text = "Schritt"
 
 [node name="ResetButton" type="Button" parent="Root/Margin/VBox/Buttons"]
 text = "Reset"
+
+[node name="StatsPanel" parent="." instance=ExtResource("2_stats")]

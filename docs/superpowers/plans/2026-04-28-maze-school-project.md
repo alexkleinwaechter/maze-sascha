@@ -2938,7 +2938,7 @@ public sealed class PerformanceTracker
 - Create: `scripts/Hud/StatsPanel.cs`
 - Create: `scenes/StatsPanel.tscn`
 
-- [ ] **Step 1: `StatsPanel.cs` anlegen**
+- [x] **Step 1: `StatsPanel.cs` anlegen**
 
 ```csharp
 using Godot;
@@ -2978,7 +2978,7 @@ public partial class StatsPanel : PanelContainer
 }
 ```
 
-- [ ] **Step 2: `StatsPanel.tscn` anlegen**
+- [x] **Step 2: `StatsPanel.tscn` anlegen**
 
 ```text
 [gd_scene load_steps=2 format=3 uid="uid://b0maze0stats"]
@@ -3018,7 +3018,7 @@ text = "Pfadlänge: -"
 text = "Speicher: -"
 ```
 
-- [ ] **Step 3: StatsPanel in Hud einhängen**
+- [x] **Step 3: StatsPanel in Hud einhängen**
 
 In `Hud.tscn` ans Ende einfügen (vor allen anderen Knoten löschen NICHT!):
 
@@ -3034,7 +3034,7 @@ und am Ende:
 [node name="StatsPanel" parent="." instance=ExtResource("2_stats")]
 ```
 
-- [ ] **Step 4: Main mit Tracker verdrahten**
+- [x] **Step 4: Main mit Tracker verdrahten**
 
 ```csharp
 private readonly PerformanceTracker _tracker = new();

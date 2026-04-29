@@ -15,6 +15,7 @@ namespace Maze;
 public partial class Main : Node
 {
     private Hud _hud = null!;
+    private StatsPanel _stats = null!;
     private MazeView2D _view2D = null!;
     private MazeView3D _view3D = null!;
     private AlgorithmRunner _runner = null!;
@@ -42,10 +43,12 @@ public partial class Main : Node
     private Cell _solverGoal = null!;
 
     private readonly Random _random = new();
+    private readonly PerformanceTracker _tracker = new();
 
     public override void _Ready()
     {
         _hud = GetNode<Hud>("Hud");
+        _stats = GetNode<StatsPanel>("Hud/StatsPanel");
         _view2D = GetNode<MazeView2D>("MazeView2D");
         _view3D = GetNode<MazeView3D>("MazeView3D");
         _runner = GetNode<AlgorithmRunner>("Runner");
@@ -85,6 +88,9 @@ public partial class Main : Node
             return;
         }
 
+        _tracker.Start();
+        _stats.UpdateStats(_tracker.Elapsed, _tracker.Steps, _tracker.VisitedCells, _tracker.PathLength, 0);
+
         _runner.StopAll();
         _currentMaze = new Model.Maze(width, height);
         _view2D.SetMaze(_currentMaze);
@@ -102,6 +108,9 @@ public partial class Main : Node
         var step = _runner.LastGenerationStep;
         step.Cell.State = step.NewState;
         _view2D.Refresh();
+        _tracker.TickStep();
+        _tracker.IncrementVisited();
+        _stats.UpdateStats(_tracker.Elapsed, _tracker.Steps, _tracker.VisitedCells, _tracker.PathLength, 0);
         // 3D NICHT pro Schritt aktualisieren – zu langsam.
     }
 
@@ -115,6 +124,8 @@ public partial class Main : Node
         _view2D.Refresh();
         // 3D einmalig nach Abschluss der Generierung aufbauen.
         _view3D.SetMaze(_currentMaze);
+        _tracker.Stop();
+        _stats.UpdateStats(_tracker.Elapsed, _tracker.Steps, _tracker.VisitedCells, _tracker.PathLength, _tracker.ManagedMemoryDeltaBytes);
         GD.Print("[Main] Generator fertig.");
     }
 
@@ -131,6 +142,9 @@ public partial class Main : Node
             GD.PrintErr($"[Main] Unbekannter Solver: {solverId}");
             return;
         }
+
+        _tracker.Start();
+        _stats.UpdateStats(_tracker.Elapsed, _tracker.Steps, _tracker.VisitedCells, _tracker.PathLength, 0);
 
         _currentMaze.ResetSolverState();
 
@@ -163,12 +177,21 @@ public partial class Main : Node
 
         step.Cell.Distance = step.Distance;
         _view2D.Refresh();
+
+        _tracker.TickStep();
+        if (step.NewState == CellState.Visited)
+            _tracker.IncrementVisited();
+        if (step.NewState == CellState.Path)
+            _tracker.SetPathLength(step.Distance + 1);
+        _stats.UpdateStats(_tracker.Elapsed, _tracker.Steps, _tracker.VisitedCells, _tracker.PathLength, 0);
     }
 
     private void OnSolverFinished()
     {
         _view2D.Refresh();
         _view3D.Refresh();
+        _tracker.Stop();
+        _stats.UpdateStats(_tracker.Elapsed, _tracker.Steps, _tracker.VisitedCells, _tracker.PathLength, _tracker.ManagedMemoryDeltaBytes);
         GD.Print("[Main] Solver fertig.");
     }
 
