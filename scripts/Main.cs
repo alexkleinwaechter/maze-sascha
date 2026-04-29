@@ -33,7 +33,8 @@ public partial class Main : Node
     {
         ["bfs"] = new BreadthFirstSolver(),
         ["dfs"] = new DepthFirstSolver(),
-        ["a-star"] = new AStarSolver()
+        ["a-star"] = new AStarSolver(),
+        ["greedy"] = new GreedyBestFirstSolver()
     };
     private Cell _solverStart = null!;
     private Cell _solverGoal = null!;
