@@ -44,6 +44,7 @@ public partial class Main : Node
 
     private readonly Random _random = new();
     private readonly PerformanceTracker _tracker = new();
+    private bool _suppressViewRefresh;
 
     public override void _Ready()
     {
@@ -62,6 +63,7 @@ public partial class Main : Node
         _hud.ResetRequested += OnResetRequested;
         _hud.ViewToggleRequested += OnViewToggled;
         _hud.HeatmapToggle += OnHeatmapToggled;
+        _hud.UnboundedModeChanged += OnUnboundedModeChanged;
 
         _runner.GenerationStepProduced += OnGenerationStepProduced;
         _runner.GenerationFinished += OnGenerationFinished;
@@ -114,11 +116,15 @@ public partial class Main : Node
 
         var step = _runner.LastGenerationStep;
         step.Cell.State = step.NewState;
-        _view2D.Refresh();
+
         _tracker.TickStep();
         _tracker.IncrementVisited();
+
+        if (_suppressViewRefresh)
+            return;
+
+        _view2D.Refresh();
         _stats.UpdateStats(_tracker.Elapsed, _tracker.Steps, _tracker.VisitedCells, _tracker.PathLength, 0);
-        // 3D NICHT pro Schritt aktualisieren – zu langsam.
     }
 
     private void OnGenerationFinished()
@@ -183,13 +189,17 @@ public partial class Main : Node
             step.Cell.State = step.NewState;
 
         step.Cell.Distance = step.Distance;
-        _view2D.Refresh();
 
         _tracker.TickStep();
         if (step.NewState == CellState.Visited)
             _tracker.IncrementVisited();
         if (step.NewState == CellState.Path)
             _tracker.SetPathLength(step.Distance + 1);
+
+        if (_suppressViewRefresh)
+            return;
+
+        _view2D.Refresh();
         _stats.UpdateStats(_tracker.Elapsed, _tracker.Steps, _tracker.VisitedCells, _tracker.PathLength, 0);
     }
 
@@ -237,5 +247,11 @@ public partial class Main : Node
     {
         _view2D.ShowDistances = enabled;
         _view2D.Refresh();
+    }
+
+    private void OnUnboundedModeChanged(bool unbounded)
+    {
+        _suppressViewRefresh = unbounded;
+        _runner.Mode = unbounded ? AlgorithmRunner.RunMode.Unbounded : AlgorithmRunner.RunMode.Throttled;
     }
 }
