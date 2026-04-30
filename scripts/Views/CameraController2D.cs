@@ -101,4 +101,23 @@ public partial class CameraController2D : Camera2D
         if (what == NotificationApplicationFocusOut)
             _isPanning = false;
     }
+
+    /// <summary>
+    /// Setzt Zoom und Position so, dass das gesamte Maze ins Viewport passt mit ~10% Rand.
+    /// </summary>
+    public void FitToMaze(Model.Maze maze)
+    {
+        var view = GetParent<MazeView2D>();
+        float worldW = maze.Width  * view.CellSizePx;
+        float worldH = maze.Height * view.CellSizePx;
+
+        Vector2 viewport = GetViewportRect().Size;
+        float zoomX = viewport.X / worldW;
+        float zoomY = viewport.Y / worldH;
+        float zoomFit = Mathf.Min(zoomX, zoomY) * 0.9f;
+        zoomFit = Mathf.Clamp(zoomFit, MinZoom, MaxZoom);
+
+        Zoom = new Vector2(zoomFit, zoomFit);
+        Position = new Vector2(worldW / 2f, worldH / 2f);
+    }
 }

@@ -44,12 +44,19 @@ public partial class MazeView2D : Node2D
     private double _refreshAccumulator;
 
     private Maze.Model.Maze _maze = null!;
+    private CameraController2D _camera = null!;
+
+    public override void _Ready()
+    {
+        _camera = GetNode<CameraController2D>("Camera2D");
+    }
 
     /// <summary>Setzt das aktuelle Maze und loest Neuzeichnung aus.</summary>
     public void SetMaze(Maze.Model.Maze maze)
     {
         _maze = maze;
         QueueRedraw();
+        _camera.FitToMaze(maze);
     }
 
     /// <summary>
