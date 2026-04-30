@@ -135,8 +135,10 @@ public partial class Main : Node
             cell.State = CellState.Open;
 
         _view2D.ForceRefresh();
-        // 3D einmalig nach Abschluss der Generierung aufbauen.
-        _view3D.SetMaze(_currentMaze);
+        // 3D nur aufbauen, wenn der User die 3D-Ansicht gerade sieht. Wird die
+        // Ansicht spaeter umgeschaltet, baut OnViewToggled lazy nach.
+        if (_view3D.Visible)
+            _view3D.SetMaze(_currentMaze);
         _tracker.Stop();
         _stats.UpdateStats(_tracker.Elapsed, _tracker.Steps, _tracker.VisitedCells, _tracker.PathLength, _tracker.ManagedMemoryDeltaBytes);
         GD.Print("[Main] Generator fertig.");
@@ -167,7 +169,6 @@ public partial class Main : Node
         _solverGoal.State = CellState.Goal;
 
         _view2D.Refresh();
-        _view3D.Refresh();
 
         _runner.StopAll();
         _runner.StartSolver(solver.Solve(_currentMaze, _solverStart, _solverGoal));
@@ -206,7 +207,6 @@ public partial class Main : Node
     private void OnSolverFinished()
     {
         _view2D.ForceRefresh();
-        _view3D.Refresh();
         _tracker.Stop();
         _stats.UpdateStats(_tracker.Elapsed, _tracker.Steps, _tracker.VisitedCells, _tracker.PathLength, _tracker.ManagedMemoryDeltaBytes);
         GD.Print("[Main] Solver fertig.");

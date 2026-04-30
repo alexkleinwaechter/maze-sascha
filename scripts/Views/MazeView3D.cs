@@ -126,9 +126,11 @@ public partial class MazeView3D : Node3D
         vertical.VisibleInstanceCount = vi;
     }
 
-    // Beide BoxMeshes sind in der Szene bereits korrekt orientiert (horizontal vs. vertikal),
-    // daher reicht hier eine reine Translation - die Helper-Methoden bleiben getrennt,
-    // damit der Aufrufer am Methodennamen erkennt, in welchen Bucket geschrieben wird.
+    // Die Wand-Orientierung steckt im BoxMesh.Size, das im _Ready aus den
+    // [Export]-Werten gesetzt wird - NICHT in dieser Transform-Methode.
+    // Hier wird nur die Position gesetzt. Beide Helper bleiben trotz identischem
+    // Body getrennt, damit der Aufrufer am Methodennamen erkennt, in welchen
+    // Bucket geschrieben wird.
     private Transform3D HorizontalWallTransform(float centerX, float centerZ) =>
         new(Basis.Identity, new Vector3(centerX, WallHeight / 2f, centerZ));
 
