@@ -25,4 +25,31 @@ public partial class CameraController2D : Camera2D
         // Diese Kamera uebernimmt das Viewport-Rendering der 2D-Ansicht.
         MakeCurrent();
     }
+
+    public override void _Process(double delta)
+    {
+        HandlePan(delta);
+    }
+
+    private void HandlePan(double delta)
+    {
+        // WASD und Pfeiltasten bauen denselben 2D-Richtungsvektor.
+        // W/Pfeil-hoch = nach oben (-Y in Godots 2D-Welt), S/runter = +Y, A/links = -X, D/rechts = +X.
+        Vector2 input = Vector2.Zero;
+        if (Input.IsPhysicalKeyPressed(Key.W) || Input.IsPhysicalKeyPressed(Key.Up))    input += Vector2.Up;
+        if (Input.IsPhysicalKeyPressed(Key.S) || Input.IsPhysicalKeyPressed(Key.Down))  input += Vector2.Down;
+        if (Input.IsPhysicalKeyPressed(Key.A) || Input.IsPhysicalKeyPressed(Key.Left))  input += Vector2.Left;
+        if (Input.IsPhysicalKeyPressed(Key.D) || Input.IsPhysicalKeyPressed(Key.Right)) input += Vector2.Right;
+
+        if (input == Vector2.Zero)
+            return;
+
+        float speed = PanSpeed;
+        if (Input.IsPhysicalKeyPressed(Key.Shift))
+            speed *= SprintMultiplier;
+
+        // Geteilt durch Zoom: bei stark gezoomter Ansicht reicht eine kleinere Welt-Bewegung
+        // fuer dieselbe sichtbare Strecke, sodass das Pan-Tempo subjektiv konstant bleibt.
+        Position += input.Normalized() * speed * (float)delta / Zoom.X;
+    }
 }
