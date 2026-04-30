@@ -17,6 +17,7 @@ public partial class MazeView3D : Node3D
     private MeshInstance3D _floor = null!;
     private MultiMeshInstance3D _wallsHorizontal = null!;
     private MultiMeshInstance3D _wallsVertical = null!;
+    private CameraController3D _camera = null!;
     private Model.Maze _maze = null!;
 
     private static readonly StandardMaterial3D WallMaterial = new()
@@ -35,6 +36,7 @@ public partial class MazeView3D : Node3D
         _floor = GetNode<MeshInstance3D>("Floor");
         _wallsHorizontal = GetNode<MultiMeshInstance3D>("WallContainer/WallsHorizontal");
         _wallsVertical = GetNode<MultiMeshInstance3D>("WallContainer/WallsVertical");
+        _camera = GetNode<CameraController3D>("Camera3D");
 
         // Material zuweisen - die in der .tscn voreingestellten BoxMeshes haben bewusst kein Material,
         // damit die Farbe zentral hier gesetzt werden kann.
@@ -52,6 +54,7 @@ public partial class MazeView3D : Node3D
     {
         _maze = maze;
         Rebuild();
+        _camera.FitToMaze(maze);
     }
 
     public void Refresh()

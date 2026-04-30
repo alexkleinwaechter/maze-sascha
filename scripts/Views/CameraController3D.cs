@@ -1,4 +1,5 @@
 using Godot;
+using Maze.Model;
 
 namespace Maze.Views;
 
@@ -139,5 +140,24 @@ public partial class CameraController3D : Camera3D
             _mouseLook = false;
             Input.MouseMode = Input.MouseModeEnum.Visible;
         }
+    }
+
+    public void FitToMaze(Model.Maze maze)
+    {
+        float w = maze.Width;
+        float h = maze.Height;
+        float centerX = w / 2f;
+        float centerZ = h / 2f;
+        float height = Mathf.Max(w, h) * 0.8f;
+
+        Position = new Vector3(centerX, height, centerZ + height * 0.7f);
+        LookAt(new Vector3(centerX, 0, centerZ), Vector3.Up);
+
+        // Yaw/Pitch aus dem fertigen Look-At zurueckrechnen, damit die WASD-Steuerung
+        // direkt vom Auto-Fit-Zustand uebernimmt - sonst wuerde der erste Tastendruck
+        // die Kamera zurueck in den alten Winkel reissen.
+        Vector3 euler = Basis.GetEuler();
+        _pitch = euler.X;
+        _yaw = euler.Y;
     }
 }
