@@ -46,6 +46,9 @@ public partial class CameraController3D : Camera3D
 
     public override void _Process(double delta)
     {
+        // Nichts tun wenn MazeView3D nicht sichtbar ist (z.B. 2D-Ansicht aktiv).
+        if (!IsVisibleInTree()) return;
+
         if (FollowMode && _followTarget != null)
         {
             UpdateFollowCamera(delta);
@@ -147,9 +150,9 @@ public partial class CameraController3D : Camera3D
 
     public override void _UnhandledInput(InputEvent @event)
     {
-        // Nur eingehende Events verarbeiten, wenn diese Kamera die aktuelle ist.
-        // Wenn die 2D-View aktiv ist, sollen deren Input-Events durchlaufen.
-        if (!Current)
+        // Nur eingehende Events verarbeiten, wenn MazeView3D sichtbar ist.
+        // IsVisibleInTree() prueft rekursiv die gesamte Parent-Kette.
+        if (!IsVisibleInTree())
             return;
 
         // Im Follow-Modus: nur Zoom (Mausrad) und Orbit (RMB + Maus) erlaubt.
