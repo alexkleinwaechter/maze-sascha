@@ -52,4 +52,53 @@ public partial class CameraController2D : Camera2D
         // fuer dieselbe sichtbare Strecke, sodass das Pan-Tempo subjektiv konstant bleibt.
         Position += input.Normalized() * speed * (float)delta / Zoom.X;
     }
+
+    public override void _UnhandledInput(InputEvent @event)
+    {
+        if (@event is InputEventMouseButton mb)
+        {
+            // RMB druecken/loslassen schaltet den Drag-Modus.
+            if (mb.ButtonIndex == MouseButton.Right)
+            {
+                _isPanning = mb.Pressed;
+                return;
+            }
+
+            // Mausrad zoomt mit Mausposition als Pivot, sodass der Punkt unter dem Cursor stationaer bleibt.
+            if (mb.Pressed && (mb.ButtonIndex == MouseButton.WheelUp || mb.ButtonIndex == MouseButton.WheelDown))
+            {
+                float step = ZoomStep;
+                if (Input.IsPhysicalKeyPressed(Key.Shift))
+                    step = ZoomSprintMultiplier;
+
+                float factor = mb.ButtonIndex == MouseButton.WheelUp ? step : 1f / step;
+
+                // Pivot-Math: Welt-Mausposition vor dem Zoom merken, Zoom anwenden,
+                // dann Position so verschieben, dass die Welt-Mausposition gleich bleibt.
+                Vector2 mouseWorldBefore = GetGlobalMousePosition();
+                Vector2 newZoom = Zoom * factor;
+                newZoom.X = Mathf.Clamp(newZoom.X, MinZoom, MaxZoom);
+                newZoom.Y = Mathf.Clamp(newZoom.Y, MinZoom, MaxZoom);
+                Zoom = newZoom;
+                Vector2 mouseWorldAfter = GetGlobalMousePosition();
+                Position += mouseWorldBefore - mouseWorldAfter;
+                return;
+            }
+        }
+
+        // Mausbewegung im Drag-Modus pannt entgegengesetzt zur Mausbewegung.
+        // Geteilt durch Zoom: 1 Pixel Mausbewegung == 1 Pixel sichtbare Verschiebung.
+        if (@event is InputEventMouseMotion motion && _isPanning)
+        {
+            Position -= motion.Relative / Zoom;
+        }
+    }
+
+    public override void _Notification(int what)
+    {
+        // Wenn das Fenster den Fokus verliert, den Drag-Modus zuruecksetzen,
+        // damit der Cursor sich nicht "festhaelt".
+        if (what == NotificationApplicationFocusOut)
+            _isPanning = false;
+    }
 }
