@@ -88,6 +88,9 @@ text = "3D-Ansicht"
 [node name="HeatmapToggle" type="CheckBox" parent="Root/Margin/VBox/Algos"]
 text = "Distanz-Heatmap"
 
+[node name="FollowCamToggle" type="CheckBox" parent="Root/Margin/VBox/Algos"]
+text = "Verfolger-Kamera"
+
 [node name="Buttons" type="HBoxContainer" parent="Root/Margin/VBox"]
 
 [node name="GenerateButton" type="Button" parent="Root/Margin/VBox/Buttons"]

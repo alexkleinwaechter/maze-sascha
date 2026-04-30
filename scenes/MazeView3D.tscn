@@ -1,7 +1,12 @@
-[gd_scene load_steps=6 format=3 uid="uid://b0maze0view3d"]
+[gd_scene load_steps=8 format=3 uid="uid://b0maze0view3d"]
 
 [ext_resource type="Script" path="res://scripts/Views/MazeView3D.cs" id="1_view3d"]
 [ext_resource type="Script" path="res://scripts/Views/CameraController3D.cs" id="2_camctl"]
+[ext_resource type="Script" path="res://scripts/Views/PlayerCharacter3D.cs" id="3_player"]
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_player"]
+height = 1.0
+radius = 0.25
 
 [sub_resource type="BoxMesh" id="BoxMesh_horizontal"]
 size = Vector3(1, 1.4, 0.1)
@@ -39,3 +44,10 @@ multimesh = SubResource("MultiMesh_horizontal")
 
 [node name="WallsVertical" type="MultiMeshInstance3D" parent="WallContainer"]
 multimesh = SubResource("MultiMesh_vertical")
+
+[node name="Player" type="Node3D" parent="."]
+visible = false
+script = ExtResource("3_player")
+
+[node name="Mesh" type="MeshInstance3D" parent="Player"]
+mesh = SubResource("CapsuleMesh_player")

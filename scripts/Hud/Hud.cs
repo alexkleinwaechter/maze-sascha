@@ -18,6 +18,7 @@ public partial class Hud : CanvasLayer
     [Signal] public delegate void StepRequestedEventHandler();
     [Signal] public delegate void ResetRequestedEventHandler();
     [Signal] public delegate void UnboundedModeChangedEventHandler(bool unbounded);
+    [Signal] public delegate void FollowCamToggleEventHandler(bool enabled);
 
     // ---- Knotenreferenzen (in _Ready aufgeloest) ----
     private HSlider _widthSlider = null!;
@@ -35,6 +36,7 @@ public partial class Hud : CanvasLayer
     private CheckBox _viewToggle = null!;
     private CheckBox _heatmapToggle = null!;
     private CheckBox _unboundedToggle = null!;
+    private CheckBox _followCamToggle = null!;
     private Label _widthLabel = null!;
     private Label _heightLabel = null!;
     private Label _speedLabel = null!;
@@ -59,6 +61,7 @@ public partial class Hud : CanvasLayer
         _heightLabel = GetNode<Label>("Root/Margin/VBox/Sizes/HeightLabel");
         _speedLabel = GetNode<Label>("Root/Margin/VBox/SpeedRow/SpeedLabel");
         _unboundedToggle = GetNode<CheckBox>("Root/Margin/VBox/SpeedRow/UnboundedToggle");
+        _followCamToggle = GetNode<CheckBox>("Root/Margin/VBox/Algos/FollowCamToggle");
 
         // ---- Slider-Werte initial sicherstellen ----
         _widthSlider.MinValue = 5;
@@ -106,6 +109,7 @@ public partial class Hud : CanvasLayer
         _viewToggle.Toggled += OnViewToggled;
         _heatmapToggle.Toggled += OnHeatmapToggled;
         _unboundedToggle.Toggled += OnUnboundedToggled;
+        _followCamToggle.Toggled += OnFollowCamToggled;
 
         FillGeneratorChooser();
         FillSolverChooser();
@@ -190,6 +194,9 @@ public partial class Hud : CanvasLayer
     {
         EmitSignal(SignalName.HeatmapToggle, enabled);
     }
+
+    private void OnFollowCamToggled(bool enabled) =>
+        EmitSignal(SignalName.FollowCamToggle, enabled);
 
     private void FillGeneratorChooser()
     {

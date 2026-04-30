@@ -42,9 +42,14 @@ public partial class Main : Node
     private Cell _solverStart = null!;
     private Cell _solverGoal = null!;
 
+    private PlayerCharacter3D _player = null!;
+    private readonly List<Cell> _solverPath = new();
+
     private readonly Random _random = new();
     private readonly PerformanceTracker _tracker = new();
     private bool _suppressViewRefresh;
+    private const float DefaultSolverStepsPerSecond = 30f;
+    private const float DefaultBotCellsPerSecond = 4f;
 
     public override void _Ready()
     {
@@ -64,12 +69,17 @@ public partial class Main : Node
         _hud.ViewToggleRequested += OnViewToggled;
         _hud.HeatmapToggle += OnHeatmapToggled;
         _hud.UnboundedModeChanged += OnUnboundedModeChanged;
+        _hud.FollowCamToggle += OnFollowCamToggled;
+
+        _player = GetNode<PlayerCharacter3D>("MazeView3D/Player");
+        _player.GoalReached += OnBotGoalReached;
 
         _runner.GenerationStepProduced += OnGenerationStepProduced;
         _runner.GenerationFinished += OnGenerationFinished;
         _runner.SolverStepProduced += OnSolverStepProduced;
         _runner.SolverFinished += OnSolverFinished;
-        _runner.StepsPerSecond = 30f;
+        _runner.StepsPerSecond = DefaultSolverStepsPerSecond;
+        _player.MoveSpeed = DefaultBotCellsPerSecond;
 
         _view2D.Visible = true;
         _view3D.Visible = false;
@@ -100,6 +110,9 @@ public partial class Main : Node
         _tracker.Start();
         _stats.UpdateStats(_tracker.Elapsed, _tracker.Steps, _tracker.VisitedCells, _tracker.PathLength, 0);
 
+        // Vor einer Neugenerierung alte Bot-Animation und Pfadreste sicher verwerfen.
+        _solverPath.Clear();
+        _player.Hide();
         _runner.StopAll();
         _currentMaze = new Model.Maze(width, height);
         _view2D.SetMaze(_currentMaze);
@@ -161,6 +174,11 @@ public partial class Main : Node
         _tracker.Start();
         _stats.UpdateStats(_tracker.Elapsed, _tracker.Steps, _tracker.VisitedCells, _tracker.PathLength, 0);
 
+        // Solver-Lauf immer mit sauberem Bot- und Pfad-Zustand starten.
+        _solverPath.Clear();
+        _player.Hide();
+        _runner.StopAll();
+
         _currentMaze.ResetSolverState();
 
         _solverStart = _currentMaze.GetCell(0, 0);
@@ -170,7 +188,6 @@ public partial class Main : Node
 
         _view2D.Refresh();
 
-        _runner.StopAll();
         _runner.StartSolver(solver.Solve(_currentMaze, _solverStart, _solverGoal));
         _runner.IsPaused = false;
         GD.Print($"[Main] Solver gestartet: {solver.Name}");
@@ -191,6 +208,11 @@ public partial class Main : Node
 
         step.Cell.Distance = step.Distance;
 
+        // Den finalen Pfad zellweise sammeln; die Reihenfolge entspricht der vom Solver
+        // emittierten Index-Reihenfolge (Distance == Pfad-Index).
+        if (step.NewState == CellState.Path)
+            _solverPath.Add(step.Cell);
+
         _tracker.TickStep();
         if (step.NewState == CellState.Visited)
             _tracker.IncrementVisited();
@@ -210,10 +232,41 @@ public partial class Main : Node
         _tracker.Stop();
         _stats.UpdateStats(_tracker.Elapsed, _tracker.Steps, _tracker.VisitedCells, _tracker.PathLength, _tracker.ManagedMemoryDeltaBytes);
         GD.Print("[Main] Solver fertig.");
+
+        // Pfad defensiv nach Distance sortieren - falls ein Solver Path-Schritte
+        // nicht in Index-Reihenfolge yieldet, ist die Animation trotzdem korrekt.
+        _solverPath.Sort((a, b) => a.Distance.CompareTo(b.Distance));
+
+        // Vollstaendige Wegpunktliste aufbauen: Start, alle Path-Zellen, Goal.
+        var fullPath = new List<Cell>(_solverPath.Count + 2) { _solverStart };
+        fullPath.AddRange(_solverPath);
+        fullPath.Add(_solverGoal);
+
+        GD.Print($"[Main] Solver-Pfaddiagnose: pathCells={_solverPath.Count}, fullWaypoints={fullPath.Count}, start=({_solverStart.X},{_solverStart.Y}), goal=({_solverGoal.X},{_solverGoal.Y})");
+
+        // Wenn keine Loesung gefunden wurde (Pfad leer und Start nicht direkt am Goal),
+        // den Bot gar nicht erst starten - sonst wuerde er quer durchs Maze teleportieren.
+        if (_solverPath.Count == 0 && !AreNeighbors(_solverStart, _solverGoal))
+        {
+            GD.Print("[Main] Kein Pfad zum Loesen vorhanden - Bot bleibt versteckt.");
+            return;
+        }
+
+        _player.StartFollowingPath(fullPath, _view3D.CellSize);
     }
 
-    private void OnSpeedChanged(float stepsPerSecond) =>
+    private static bool AreNeighbors(Cell a, Cell b) =>
+        System.Math.Abs(a.X - b.X) + System.Math.Abs(a.Y - b.Y) == 1;
+
+    private void OnSpeedChanged(float stepsPerSecond)
+    {
         _runner.StepsPerSecond = stepsPerSecond;
+
+        // Der HUD-Regler soll nicht nur den Solver-Takt, sondern auch die sichtbare
+        // Bot-Bewegung steuern. Deshalb mappen wir ihn relativ zum Default 30 -> 4.
+        float speedFactor = stepsPerSecond / DefaultSolverStepsPerSecond;
+        _player.MoveSpeed = DefaultBotCellsPerSecond * speedFactor;
+    }
 
     private void OnPauseToggled(bool paused) =>
         _runner.IsPaused = paused;
@@ -224,6 +277,8 @@ public partial class Main : Node
     private void OnResetRequested()
     {
         _runner.StopAll();
+        _solverPath.Clear();
+        _player.Hide();
         _currentMaze = null;
         _solverStart = null!;
         _solverGoal = null!;
@@ -253,5 +308,19 @@ public partial class Main : Node
     {
         _suppressViewRefresh = unbounded;
         _runner.Mode = unbounded ? AlgorithmRunner.RunMode.Unbounded : AlgorithmRunner.RunMode.Throttled;
+    }
+
+    private void OnBotGoalReached()
+    {
+        GD.Print("[Main] Bot ist am Ziel angekommen.");
+    }
+
+    private void OnFollowCamToggled(bool enabled)
+    {
+        var camera = _view3D.GetNode<CameraController3D>("Camera3D");
+        if (enabled)
+            camera.EnableFollow(_player);
+        else
+            camera.DisableFollow();
     }
 }

@@ -227,6 +227,8 @@ _solverPath.Clear();
 _player.Hide();
 ```
 
+> **Bugfix-Nachtrag (Reset/Neugenerierung):** Es gab einen Laufzeitfehler, bei dem der Bot nach `Reset` oder nach einer Neugenerierung scheinbar durch Waende lief. Ursache war ein nicht vollstaendig zurueckgesetzter Bot-/Pfad-Zustand zwischen Runs. Die Loesung ist ein harter Reset von `_solverPath` + `_player.Hide()` **nicht nur** vor dem Solve, sondern auch in `OnGenerateRequested` und `OnResetRequested`, jeweils vor Start des naechsten Ablaufs.
+
 Erweitere `OnSolverStepProduced` direkt nach `step.Cell.Distance = step.Distance;`:
 
 ```csharp
@@ -306,12 +308,31 @@ git add scripts/Main.cs
 git commit -m "Task 16.2: Solver-Pfad an PlayerCharacter3D uebergeben"
 ```
 
+#### Verifizierter Fix fuer Reset-/Neugenerierungs-Bug (Nachtrag)
+
+**Problem:** Nach `Reset` oder neuer Maze-Generierung konnte der Solver-Bot alte Pfadreste verwenden. Das wirkte wie "durch Waende laufen", obwohl die neuen Wall-Daten korrekt waren.
+
+**Ursache:** `_solverPath` und Player-Bewegungszustand wurden nicht in allen Startpunkten konsistent geloescht.
+
+**Loesung (Code):**
+- `OnSolveRequested`: `_solverPath.Clear(); _player.Hide(); _runner.StopAll();`
+- `OnGenerateRequested`: `_solverPath.Clear(); _player.Hide(); _runner.StopAll();`
+- `OnResetRequested`: `_runner.StopAll(); _solverPath.Clear(); _player.Hide();`
+- `OnSolverFinished`: Diagnoselog mit `pathCells`/`fullWaypoints`, um inkonsistente Pfadlaengen sofort zu sehen.
+
+**Regressionstest:**
+1. Maze A erzeugen, Solver laufen lassen (Bot folgt korrekt).
+2. `Reset` druecken.
+3. Maze B mit anderem Generator erzeugen.
+4. Solver erneut starten.
+5. Erwartung: Bot bleibt auf dem neuen Solverpfad; keine alten Wegpunkte, keine Wanddurchdringung.
+
 ### Task 16.3: `CameraController3D` bekommt einen Verfolger-Modus
 
 **Files:**
 - Modify: `scripts/Views/CameraController3D.cs`
 
-- [ ] **Step 1: Felder und `[Export]`-Optionen fuer den Follow-Modus**
+- [x] **Step 1: Felder und `[Export]`-Optionen fuer den Follow-Modus**
 
 In `CameraController3D` direkt unter den bestehenden `[Export]`-Feldern erweitern:
 
@@ -326,22 +347,27 @@ Direkt unter den bestehenden privaten Feldern (`_yaw`, `_pitch`, `_mouseLook`) e
 ```csharp
 private Node3D _followTarget;
 public bool FollowMode { get; private set; }
+
+// Orbit-Zustand fuer den Follow-Modus: sphaerische Koordinaten um das Target.
+private float _followOrbitYaw;    // horizontaler Winkel (Bogen links/rechts)
+private float _followOrbitPitch;  // vertikaler Winkel (Bogen rauf/runter)
+private float _followOrbitRadius; // Abstand zum Target in Welt-Einheiten
 ```
 
-- [ ] **Step 2: Public API zum An- und Abschalten des Follow-Modus**
+- [x] **Step 2: Public API zum An- und Abschalten des Follow-Modus**
 
 Direkt unter `FitToMaze` einfuegen:
 
 ```csharp
-/// <summary>
-/// Aktiviert den Verfolger-Modus mit dem uebergebenen Target. Solange der Modus
-/// aktiv ist, ignoriert die Kamera WASD/QE/Pfeiltasten/Maus und folgt stattdessen
-/// dem Target weich aus halbhoher Schraege von hinten.
-/// </summary>
 public void EnableFollow(Node3D target)
 {
     _followTarget = target;
     FollowMode = true;
+
+    // Orbit-Radius und -Winkel aus den Export-Feldern initialisieren.
+    _followOrbitRadius = Mathf.Sqrt(FollowHeight * FollowHeight + FollowDistance * FollowDistance);
+    _followOrbitPitch  = Mathf.Atan2(FollowHeight, FollowDistance);
+    _followOrbitYaw    = 0f;
 
     // Maus-Look sicher abschalten, damit der Cursor nicht im Spielbereich klemmt.
     if (_mouseLook)
@@ -358,7 +384,7 @@ public void DisableFollow()
 }
 ```
 
-- [ ] **Step 3: `_Process` und `_UnhandledInput` um den Follow-Pfad erweitern**
+- [x] **Step 3: `_Process`, `UpdateFollowCamera` und `_UnhandledInput` anpassen**
 
 Ersetze `_Process` durch:
 
@@ -370,50 +396,86 @@ public override void _Process(double delta)
         UpdateFollowCamera(delta);
         return;
     }
-
     HandleMovement(delta);
     HandleKeyboardLook(delta);
     ApplyRotation();
 }
 ```
 
-Direkt unter `_Process` ergaenzen:
+`UpdateFollowCamera` berechnet die Kameraposition aus sphaerischen Koordinaten statt einem festen Offset — das ermoeglicht Orbit und Zoom:
 
 ```csharp
 private void UpdateFollowCamera(double delta)
 {
-    // Welt-Position halbhoch hinter dem Target. "Hinten" bedeutet: in Richtung der
-    // negativen Bewegungsrichtung des Targets - hier vereinfacht durch eine
-    // feste Schraege ueber der Target-XZ-Ebene, da unsere Figur keine
-    // explizite "Forward"-Achse hat. Spaeter (Phase 17) koennte man hier
-    // _followTarget.Basis.Z fuer dynamisches Hinterherflanken nutzen.
     Vector3 targetPos = _followTarget.GlobalPosition;
-    Vector3 desiredPos = targetPos + new Vector3(0, FollowHeight, FollowDistance);
 
-    // Smooth lerp: Annaeherungsgeschwindigkeit haengt von delta UND dem
-    // Smoothing-Faktor ab; je weiter weg, desto schneller wird aufgeholt.
+    // Sphaerische Koordinaten: Orbit-Position aus Radius, Yaw und Pitch berechnen.
+    float cosP = Mathf.Cos(_followOrbitPitch);
+    float sinP = Mathf.Sin(_followOrbitPitch);
+    Vector3 orbitOffset = new Vector3(
+        Mathf.Sin(_followOrbitYaw) * cosP,
+        sinP,
+        Mathf.Cos(_followOrbitYaw) * cosP
+    ) * _followOrbitRadius;
+
     float lerpFactor = 1f - Mathf.Exp(-FollowSmoothing * (float)delta);
-    GlobalPosition = GlobalPosition.Lerp(desiredPos, lerpFactor);
-
-    // Zum Target-Mittelpunkt blicken, leicht nach unten korrigiert.
+    GlobalPosition = GlobalPosition.Lerp(targetPos + orbitOffset, lerpFactor);
     LookAt(targetPos + new Vector3(0, 0.3f, 0), Vector3.Up);
 
-    // Yaw/Pitch synchron halten, damit der Wechsel zurueck in den Free-Modus
-    // direkt an der aktuellen Blickrichtung weitermacht statt zurueckzuspringen.
     Vector3 euler = Basis.GetEuler();
     _pitch = euler.X;
-    _yaw = euler.Y;
+    _yaw   = euler.Y;
 }
 ```
 
-In `_UnhandledInput` direkt nach der Methodensignatur und vor dem ersten `if`:
+In `_UnhandledInput` im Follow-Modus Zoom und Orbit erlauben (statt einfach `return`):
 
 ```csharp
-// Im Follow-Modus alle direkten Kameraeingaben ignorieren.
-if (FollowMode) return;
+public override void _UnhandledInput(InputEvent @event)
+{
+    if (FollowMode)
+    {
+        HandleFollowInput(@event);
+        return;
+    }
+    // ... bisherige Free-Kamera-Eingaben ...
+}
+
+private void HandleFollowInput(InputEvent @event)
+{
+    if (@event is InputEventMouseButton mb)
+    {
+        // RMB schaltet Orbit-Look an/aus.
+        if (mb.ButtonIndex == MouseButton.Right)
+        {
+            _mouseLook = mb.Pressed;
+            Input.MouseMode = mb.Pressed ? Input.MouseModeEnum.Captured : Input.MouseModeEnum.Visible;
+            return;
+        }
+        // Mausrad aendert den Orbit-Radius (Zoom).
+        if (mb.Pressed && (mb.ButtonIndex == MouseButton.WheelUp || mb.ButtonIndex == MouseButton.WheelDown))
+        {
+            float step = ZoomStep;
+            if (Input.IsPhysicalKeyPressed(Key.Shift)) step *= ZoomSprintMultiplier;
+            _followOrbitRadius = Mathf.Clamp(
+                _followOrbitRadius + (mb.ButtonIndex == MouseButton.WheelUp ? -step : step),
+                1f, 200f);
+        }
+    }
+    // RMB + Maus dreht die Kamera um das Target.
+    if (@event is InputEventMouseMotion motion && _mouseLook)
+    {
+        _followOrbitYaw   -= motion.Relative.X * MouseSensitivity;
+        _followOrbitPitch  = Mathf.Clamp(
+            _followOrbitPitch - motion.Relative.Y * MouseSensitivity,
+            0.05f, Mathf.Pi / 2f - 0.05f);
+    }
+}
 ```
 
-- [ ] **Step 4: Build und manueller Test (HUD-Toggle kommt in 16.4)**
+> **Ergaenzung (nachtraeglich umgesetzt):** Im Follow-Modus stehen Zoom (Mausrad, +Shift schnell) und Orbit (RMB + Maus) zur Verfuegung. Die Steuerung ist dieselbe wie in der freien Kamera, wirkt aber auf die sphaerischen Orbit-Koordinaten statt auf den absoluten Transform.
+
+- [x] **Step 4: Build und manueller Test (HUD-Toggle kommt in 16.4)**
 
 ```powershell
 & $env:GODOT4 --path $PWD --build-solutions
@@ -422,12 +484,27 @@ dotnet build
 
 Erwartet: `Build succeeded`. Verhalten zur Laufzeit ist noch unveraendert, weil noch niemand `EnableFollow` ruft.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/Views/CameraController3D.cs
-git commit -m "Task 16.3: CameraController3D mit Follow-Modus"
+git commit -m "Task 16.3: CameraController3D mit Follow-Modus (Orbit-Zoom + RMB-Rotate)"
 ```
+
+#### Nachtraeglich umgesetzter Bugfix: 2D-Navigation durch CameraController3D blockiert
+
+**Problem:** Nach Implementierung von Task 16.3 waren Mausrad-Zoom und RMB-Drag-Pan im 2D-View nicht mehr nutzbar.
+
+**Ursache:** `CameraController3D._UnhandledInput` und `_Process` liefen auch dann, wenn `MazeView3D` auf `Visible = false` gesetzt war. `SetInputAsHandled()` konsumierte Mausrad- und RMB-Events bevor `CameraController2D` sie empfangen konnte. Ein erster Fix-Versuch mit `if (!Current)` war falsch, da `Camera3D.Current` unabhaengig von der Eltern-Sichtbarkeit `true` bleibt.
+
+**Loesung (umgesetzt):** `IsVisibleInTree()` am Anfang beider Methoden:
+```csharp
+// In _Process und _UnhandledInput:
+if (!IsVisibleInTree()) return;
+```
+`IsVisibleInTree()` traversiert rekursiv die gesamte Parent-Kette — wenn `MazeView3D.Visible = false`, gibt es zuverlaessig `false` zurueck.
+
+**Commit:** `Fix: CameraController3D uses IsVisibleInTree() guard in _Process and _UnhandledInput`
 
 ### Task 16.4: HUD — "Verfolger-Kamera"-Checkbox
 
