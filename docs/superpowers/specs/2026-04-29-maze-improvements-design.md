@@ -317,9 +317,109 @@ public void FitToMaze(Model.Maze maze)
 - **Look-Mode + Alt-Tab:** `MouseMode = Captured` muss in `_Notification(NotificationApplicationFocusOut)` zurück auf `Visible` gesetzt werden, sonst klemmt der Cursor.
 - **Maus-Sensitivity bei verschiedenen Auflösungen:** `0.003` ist auf 1080p kalibriert; bei 4K ist die Drehung dadurch schneller. Akzeptabel für Schulprojekt; ggf. später `[Export]`-konfigurierbar belassen.
 
-## Out of Scope
+## Phase 15 — 2D-Pan/Zoom-Steuerung
 
-- Keine Auto-Fit-Logik im 2D (das passiert dort über `Camera2D.Position` außerhalb dieses Specs).
+**Hinzugefügt am 2026-04-30 als Folge-Anforderung.** Bei Mazes >250×250 ist `MazeView2D` ohne Kamerasteuerung praktisch unbrauchbar — die Welt ist 6000×6000 px (bei 24 px/Zelle) bzw. 24000×24000 px bei 1000×1000, größer als jeder Bildschirm. `Camera2D` mit Pan/Zoom-Controller analog zur 3D-Kamera macht das Maze begehbar.
+
+### 15.1 Neuer `CameraController2D`
+
+`scripts/Views/CameraController2D.cs` erweitert `Camera2D` und ersetzt das bisher fehlende Kamera-Setup im 2D-View. Die Klasse trennt Pan-/Zoom-Logik vom Maze-Rendering — analog zum bestehenden `CameraController3D`.
+
+```csharp
+[Export] public float PanSpeed             = 800f;   // Welt-px pro Sekunde
+[Export] public float SprintMultiplier     = 2f;
+[Export] public float ZoomStep             = 1.1f;   // multiplikativ pro Mausrad-Tick
+[Export] public float ZoomSprintMultiplier = 1.3f;   // Shift+Wheel macht groessere Spruenge
+[Export] public float MinZoom              = 0.01f;
+[Export] public float MaxZoom              = 5.0f;
+
+private bool _isPanning;
+```
+
+Die Camera2D wird in `MazeView2D.tscn` als Kind ergänzt mit `Current = true`, damit sie das Viewport-Rendering übernimmt.
+
+### 15.2 Bindings
+
+`_Process(double delta)` (kontinuierliche Eingaben):
+
+| Aktion | Taste(n) | Verhalten |
+|---|---|---|
+| Pan vorwärts/rückwärts | W/S | `Position.Y -= / +=` mit `PanSpeed * delta` |
+| Pan seitwärts | A/D | `Position.X -= / +=` mit `PanSpeed * delta` |
+| Pan-Backup | ←→↑↓ | Identisch zu A/D/W/S |
+| Sprint | Shift | `PanSpeed *= SprintMultiplier` während gehalten |
+
+`_UnhandledInput(InputEvent @event)`:
+
+| Aktion | Eingabe | Verhalten |
+|---|---|---|
+| Drag-Pan an | RMB drücken | `_isPanning = true` |
+| Drag-Pan aus | RMB loslassen | `_isPanning = false` |
+| Maus-Pan | `InputEventMouseMotion` während `_isPanning` | `Position -= motion.Relative / Zoom` (Skalierung mit Zoom hält Mausgeschwindigkeit konstant relativ zum sichtbaren Inhalt) |
+| Zoom in (Pivot Maus) | Mausrad hoch | `factor = ZoomStep` (oder `*ZoomSprintMultiplier` mit Shift), Pivot-Math siehe unten |
+| Zoom out (Pivot Maus) | Mausrad runter | `factor = 1 / ZoomStep` (oder `1 / ZoomSprintMultiplier` mit Shift) |
+
+Pivot-Math für Zoom mit Mausposition als Fixpunkt:
+
+```csharp
+Vector2 mouseWorldBefore = GetGlobalMousePosition();
+Zoom = (Zoom * factor).Clamp(MinZoom * Vector2.One, MaxZoom * Vector2.One);
+Vector2 mouseWorldAfter = GetGlobalMousePosition();
+Position += mouseWorldBefore - mouseWorldAfter;
+```
+
+Da `GetGlobalMousePosition()` die aktuelle Kameraeinstellung verwendet, liefert der zweite Aufruf nach der Zoom-Änderung den neuen Wert; die Differenz korrigiert `Position` so, dass der Punkt unter dem Cursor stationär bleibt.
+
+`_Notification(NotificationApplicationFocusOut)` setzt `_isPanning = false`, damit der Drag-Modus nicht "klebt", wenn der User Alt-Tab macht.
+
+### 15.3 Auto-Fit nach `SetMaze`
+
+`MazeView2D.SetMaze` ruft am Ende `_camera.FitToMaze(maze)`:
+
+```csharp
+public void FitToMaze(Model.Maze maze)
+{
+    var view = GetParent<MazeView2D>();
+    float worldW = maze.Width  * view.CellSizePx;
+    float worldH = maze.Height * view.CellSizePx;
+
+    Vector2 viewport = GetViewportRect().Size;
+    float zoomFit = Mathf.Min(viewport.X / worldW, viewport.Y / worldH) * 0.9f;
+    zoomFit = Mathf.Clamp(zoomFit, MinZoom, MaxZoom);
+
+    Zoom = new Vector2(zoomFit, zoomFit);
+    Position = new Vector2(worldW / 2f, worldH / 2f);
+}
+```
+
+`0.9` lässt 10% Rand. Egal ob 5×5 (worldW=120, zoom~5.4 → clamped auf 5.0) oder 1000×1000 (worldW=24000, zoom~0.027) — das gesamte Maze passt ins Bild.
+
+### 15.4 Edge Cases & Tests (Phase 15)
+
+- **Min-Maze 5×5** → world 120×120, zoom-fit 5.4 wird auf `MaxZoom=5.0` geclampt. Maze bleibt ~21% kleiner als das Viewport — akzeptabel.
+- **Max-Maze 1000×1000** → world 24000×24000, zoom-fit ~0.027. Größer als `MinZoom=0.01`, also kein Clamp.
+- **Pan-Kollision mit HUD:** Auto-Fit zentriert das Maze im FullView; HUD (CanvasLayer, oberste 220 px) verdeckt einen Teil. Bewusste Akzeptanz — User kann pannen oder Zoom anpassen.
+- **Drag-Pan + Alt-Tab:** `_isPanning` wird durch `_Notification(NotificationApplicationFocusOut)` zurückgesetzt.
+- **Pre-Init-Zoom/Pan:** Falls der User vor dem ersten `SetMaze` mit dem Mausrad zoomt, hat das nur kosmetischen Effekt — der nächste `FitToMaze` überschreibt es.
+
+### 15.5 Out of Scope (Phase 15)
+
+- Kein HUD-Aware-Auto-Fit (Maze unterhalb der HUD-Höhe zentrieren). User pannt manuell.
+- Keine Touch-/Pinch-Gesten.
+- Keine Persistenz der Pan/Zoom-Position über `SetMaze`-Aufrufe — jeder neue Run resettet auf Auto-Fit.
+- Keine Konfigurierbarkeit der Bindings über `project.godot` Input-Map.
+
+## Edge Cases & Tests (Gesamt — Phasen 12–14)
+
+- **Maze 1×1 / 5×5:** 3D-Auto-Fit darf nicht durch null teilen; `Mathf.Max(w,h) * 0.8` wird minimum `4` (5×0.8) — okay.
+- **Slider/SpinBox-Sync:** `SetValueNoSignal` verhindert Endlosrekursion; manuell mit Tastatur in der SpinBox testen.
+- **Throttle-Threshold-Übergang:** Ein Run mit `Width=250, Height=251` schaltet auf Throttle; Endbild muss durch `ForceRefresh` korrekt ankommen.
+- **Unbounded während laufendem Run:** Das Toggle wirkt erst beim nächsten Tick; ein laufender throttled Run wird nicht zu Unbounded umgeleitet (`Mode` wird zwar gesetzt, der Run war aber schon im Iterator). Bewusste Vereinfachung.
+- **Look-Mode + Alt-Tab:** `MouseMode = Captured` muss in `_Notification(NotificationApplicationFocusOut)` zurück auf `Visible` gesetzt werden, sonst klemmt der Cursor.
+- **Maus-Sensitivity bei verschiedenen Auflösungen:** `0.003` ist auf 1080p kalibriert; bei 4K ist die Drehung dadurch schneller. Akzeptabel für Schulprojekt; ggf. später `[Export]`-konfigurierbar belassen.
+
+## Out of Scope (Gesamt — Phasen 12–14)
+
 - Keine GPU-basierten Algorithmen — die Generatoren/Solver bleiben C#-Iteratoren.
 - Keine MultiMesh-Color-Animation während des Solvens — die 3D-View zeigt nur das fertige Maze, kein animierter Solver in 3D (war nie Teil des Projekts).
 - Keine Konfigurierbarkeit der Bindings über `project.godot` Input-Map.

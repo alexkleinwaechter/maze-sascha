@@ -1217,14 +1217,335 @@ git commit -m "Task 14.4: Kamera-Auto-Fit nach SetMaze"
 
 ---
 
-## Abnahme-Smoke-Test (alle drei Phasen zusammen)
+## Phase 15 — 2D-Pan/Zoom-Steuerung
 
-Nach Abschluss der drei Phasen sollten folgende Szenarien einwandfrei laufen:
+> **Hinzugefügt am 2026-04-30 als Folge-Anforderung.** Bei Mazes >250×250 wird `MazeView2D` ohne Kamera unbenutzbar — bei `CellSizePx = 24` und 1000×1000 ist die Welt 24000×24000 px. Diese Phase fügt eine `CameraController2D` analog zur 3D-Kamera hinzu.
+
+Ziel: Eigene `CameraController2D`-Klasse hängt am neuen `Camera2D`-Knoten in `MazeView2D.tscn`. WASD/Pfeiltasten pannen, Shift verdoppelt das Tempo, Mausrad zoomt mit Mausposition als Pivot, RMB-Drag pannt mit der Maus. `MazeView2D.SetMaze` ruft `FitToMaze` für korrekte Anfangsposition.
+
+### Task 15.1: `CameraController2D` — Skelett und `[Export]`-Felder
+
+**Files:**
+- Create: `scripts/Views/CameraController2D.cs`
+- Modify: `scenes/MazeView2D.tscn` (neuer `Camera2D`-Knoten mit Skript)
+
+- [ ] **Step 1: `scripts/Views/CameraController2D.cs` anlegen**
+
+```csharp
+using Godot;
+using Maze.Model;
+
+namespace Maze.Views;
+
+/// <summary>
+/// Frei steuerbare 2D-Kamera fuer die Maze-Ansicht.
+/// Bewegung: WASD/Pfeiltasten pannen die Kamera, Shift verdoppelt das Tempo.
+/// Drag: rechte Maustaste gedrueckt halten und Maus bewegen.
+/// Zoom: Mausrad mit Mausposition als Pivot - der Punkt unter dem Cursor bleibt stehen.
+/// </summary>
+public partial class CameraController2D : Camera2D
+{
+    [Export] public float PanSpeed = 800f;             // Welt-px pro Sekunde
+    [Export] public float SprintMultiplier = 2f;
+    [Export] public float ZoomStep = 1.1f;             // multiplikativ pro Mausrad-Tick
+    [Export] public float ZoomSprintMultiplier = 1.3f; // Shift+Wheel macht groessere Spruenge
+    [Export] public float MinZoom = 0.01f;
+    [Export] public float MaxZoom = 5.0f;
+
+    private bool _isPanning;
+
+    public override void _Ready()
+    {
+        // Diese Kamera uebernimmt das Viewport-Rendering der 2D-Ansicht.
+        MakeCurrent();
+    }
+}
+```
+
+- [ ] **Step 2: `scenes/MazeView2D.tscn` — `Camera2D` als Kind hinzufügen**
+
+Aktuelle Datei:
+
+```text
+[gd_scene format=3 uid="uid://b0ma0e0view2d"]
+
+[ext_resource type="Script" path="res://scripts/Views/MazeView2D.cs" id="1_view2d"]
+
+[node name="MazeView2D" type="Node2D"]
+script = ExtResource("1_view2d")
+position = Vector2(64, 256)
+```
+
+Ersetze durch:
+
+```text
+[gd_scene load_steps=3 format=3 uid="uid://b0ma0e0view2d"]
+
+[ext_resource type="Script" path="res://scripts/Views/MazeView2D.cs" id="1_view2d"]
+[ext_resource type="Script" path="res://scripts/Views/CameraController2D.cs" id="2_camctl2d"]
+
+[node name="MazeView2D" type="Node2D"]
+script = ExtResource("1_view2d")
+position = Vector2(64, 256)
+
+[node name="Camera2D" type="Camera2D" parent="."]
+script = ExtResource("2_camctl2d")
+```
+
+> Die `position = Vector2(64, 256)` auf dem `MazeView2D`-Knoten bleibt erhalten — sobald die `Camera2D` aktiv wird, übernimmt sie ohnehin die Viewport-Steuerung; die alte Position bleibt nur als "Fallback ohne Kamera" relevant und schadet nicht.
+
+- [ ] **Step 3: Build prüfen**
+
+```powershell
+& $env:GODOT4 --path $PWD --build-solutions
+dotnet build
+```
+
+Erwartet: `Build succeeded`.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add scripts/Views/CameraController2D.cs scenes/MazeView2D.tscn
+git commit -m "Task 15.1: CameraController2D-Skelett, an Camera2D gehaengt"
+```
+
+### Task 15.2: Pan-Bewegung — WASD/Pfeiltasten + Shift-Sprint
+
+**Files:**
+- Modify: `scripts/Views/CameraController2D.cs`
+
+- [ ] **Step 1: `_Process` mit Pan-Logik ergänzen**
+
+Ergänze in `CameraController2D` direkt unter `_Ready`:
+
+```csharp
+public override void _Process(double delta)
+{
+    HandlePan(delta);
+}
+
+private void HandlePan(double delta)
+{
+    // WASD und Pfeiltasten bauen denselben 2D-Richtungsvektor.
+    // W/Pfeil-hoch = nach oben (-Y in Godots 2D-Welt), S/runter = +Y, A/links = -X, D/rechts = +X.
+    Vector2 input = Vector2.Zero;
+    if (Input.IsPhysicalKeyPressed(Key.W) || Input.IsPhysicalKeyPressed(Key.Up))    input += Vector2.Up;
+    if (Input.IsPhysicalKeyPressed(Key.S) || Input.IsPhysicalKeyPressed(Key.Down))  input += Vector2.Down;
+    if (Input.IsPhysicalKeyPressed(Key.A) || Input.IsPhysicalKeyPressed(Key.Left))  input += Vector2.Left;
+    if (Input.IsPhysicalKeyPressed(Key.D) || Input.IsPhysicalKeyPressed(Key.Right)) input += Vector2.Right;
+
+    if (input == Vector2.Zero)
+        return;
+
+    float speed = PanSpeed;
+    if (Input.IsPhysicalKeyPressed(Key.Shift))
+        speed *= SprintMultiplier;
+
+    // Geteilt durch Zoom: bei stark gezoomter Ansicht reicht eine kleinere Welt-Bewegung
+    // fuer dieselbe sichtbare Strecke, sodass das Pan-Tempo subjektiv konstant bleibt.
+    Position += input.Normalized() * speed * (float)delta / Zoom.X;
+}
+```
+
+- [ ] **Step 2: Build prüfen**
+
+```powershell
+dotnet build
+```
+
+Erwartet: `Build succeeded`.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add scripts/Views/CameraController2D.cs
+git commit -m "Task 15.2: 2D-Kamera-Pan mit WASD/Pfeilen und Shift-Sprint"
+```
+
+### Task 15.3: Mausrad-Zoom mit Pivot + RMB-Drag-Pan
+
+**Files:**
+- Modify: `scripts/Views/CameraController2D.cs`
+
+- [ ] **Step 1: `_UnhandledInput` ergänzen**
+
+Ergänze direkt unter `HandlePan`:
+
+```csharp
+public override void _UnhandledInput(InputEvent @event)
+{
+    if (@event is InputEventMouseButton mb)
+    {
+        // RMB druecken/loslassen schaltet den Drag-Modus.
+        if (mb.ButtonIndex == MouseButton.Right)
+        {
+            _isPanning = mb.Pressed;
+            return;
+        }
+
+        // Mausrad zoomt mit Mausposition als Pivot, sodass der Punkt unter dem Cursor stationaer bleibt.
+        if (mb.Pressed && (mb.ButtonIndex == MouseButton.WheelUp || mb.ButtonIndex == MouseButton.WheelDown))
+        {
+            float step = ZoomStep;
+            if (Input.IsPhysicalKeyPressed(Key.Shift))
+                step = ZoomSprintMultiplier;
+
+            float factor = mb.ButtonIndex == MouseButton.WheelUp ? step : 1f / step;
+
+            // Pivot-Math: Welt-Mausposition vor dem Zoom merken, Zoom anwenden,
+            // dann Position so verschieben, dass die Welt-Mausposition gleich bleibt.
+            Vector2 mouseWorldBefore = GetGlobalMousePosition();
+            Vector2 newZoom = Zoom * factor;
+            newZoom.X = Mathf.Clamp(newZoom.X, MinZoom, MaxZoom);
+            newZoom.Y = Mathf.Clamp(newZoom.Y, MinZoom, MaxZoom);
+            Zoom = newZoom;
+            Vector2 mouseWorldAfter = GetGlobalMousePosition();
+            Position += mouseWorldBefore - mouseWorldAfter;
+            return;
+        }
+    }
+
+    // Mausbewegung im Drag-Modus pannt entgegengesetzt zur Mausbewegung.
+    // Geteilt durch Zoom: 1 Pixel Mausbewegung == 1 Pixel sichtbare Verschiebung.
+    if (@event is InputEventMouseMotion motion && _isPanning)
+    {
+        Position -= motion.Relative / Zoom;
+    }
+}
+```
+
+- [ ] **Step 2: `_Notification` zum Beenden des Drag-Modus bei Fokus-Verlust**
+
+Ergänze direkt unter `_UnhandledInput`:
+
+```csharp
+public override void _Notification(int what)
+{
+    // Wenn das Fenster den Fokus verliert, den Drag-Modus zuruecksetzen,
+    // damit der Cursor sich nicht "festhaelt".
+    if (what == NotificationApplicationFocusOut)
+        _isPanning = false;
+}
+```
+
+- [ ] **Step 3: Build prüfen**
+
+```powershell
+dotnet build
+```
+
+Erwartet: `Build succeeded`.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add scripts/Views/CameraController2D.cs
+git commit -m "Task 15.3: 2D-Mausrad-Zoom mit Pivot und RMB-Drag-Pan"
+```
+
+### Task 15.4: `FitToMaze` — Auto-Fit nach `SetMaze`
+
+**Files:**
+- Modify: `scripts/Views/CameraController2D.cs` (FitToMaze-Methode)
+- Modify: `scripts/Views/MazeView2D.cs` (SetMaze ruft FitToMaze)
+
+- [ ] **Step 1: `CameraController2D.FitToMaze` ergänzen**
+
+Ergänze in `CameraController2D` direkt unter `_Notification`:
+
+```csharp
+/// <summary>
+/// Setzt Zoom und Position so, dass das gesamte Maze ins Viewport passt mit ~10% Rand.
+/// </summary>
+public void FitToMaze(Model.Maze maze)
+{
+    var view = GetParent<MazeView2D>();
+    float worldW = maze.Width  * view.CellSizePx;
+    float worldH = maze.Height * view.CellSizePx;
+
+    Vector2 viewport = GetViewportRect().Size;
+    float zoomX = viewport.X / worldW;
+    float zoomY = viewport.Y / worldH;
+    float zoomFit = Mathf.Min(zoomX, zoomY) * 0.9f;
+    zoomFit = Mathf.Clamp(zoomFit, MinZoom, MaxZoom);
+
+    Zoom = new Vector2(zoomFit, zoomFit);
+    Position = new Vector2(worldW / 2f, worldH / 2f);
+}
+```
+
+- [ ] **Step 2: `MazeView2D.SetMaze` ruft `FitToMaze`**
+
+In `scripts/Views/MazeView2D.cs` ergänze ein Feld für die Kamera-Referenz neben dem `_maze`-Feld:
+
+```csharp
+private CameraController2D _camera = null!;
+```
+
+Ergänze ein `_Ready()` (das die Klasse aktuell nicht hat) ODER, falls bereits vorhanden, eine Zeile darin:
+
+```csharp
+public override void _Ready()
+{
+    _camera = GetNode<CameraController2D>("Camera2D");
+}
+```
+
+> Hinweis: `MazeView2D` hat aktuell kein `_Ready` (die Klasse löste bisher keine Knoten auf). Diese neue `_Ready`-Methode wird hinzugefügt, eine eventuell vorhandene `_Process`-Override aus Task 12.2 bleibt unberührt.
+
+Aktualisiere `SetMaze` so, dass die Kamera nach dem `QueueRedraw` auf das neue Maze ausgerichtet wird:
+
+```csharp
+public void SetMaze(Maze.Model.Maze maze)
+{
+    _maze = maze;
+    QueueRedraw();
+    _camera.FitToMaze(maze);
+}
+```
+
+- [ ] **Step 3: Build prüfen**
+
+```powershell
+& $env:GODOT4 --path $PWD --build-solutions
+dotnet build
+```
+
+Erwartet: `Build succeeded`.
+
+- [ ] **Step 4: Manuell testen — Auto-Fit + Pan + Zoom**
+
+```powershell
+& $env:GODOT4 --path $PWD
+```
+
+Im Editor:
+1. `25×25 Recursive Backtracker` generieren. Erwartet: Maze füllt das 2D-Viewport (mit ~10% Rand).
+2. WASD pannen die Kamera, Shift verdoppelt das Tempo.
+3. Pfeiltasten pannen identisch.
+4. Mausrad zoomt; der Punkt unter dem Cursor bleibt stationär.
+5. RMB-Drag pannt mit der Maus.
+6. Auf `1000×1000` umstellen, mit "Ohne Tempolimit" generieren. Erwartet: Maze ist als gepixelte Fläche sichtbar (Zellen sehr klein, aber komplett im Bild). Hineinzoomen mit Mausrad funktioniert flüssig.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add scripts/Views/CameraController2D.cs scripts/Views/MazeView2D.cs
+git commit -m "Task 15.4: 2D-FitToMaze - Auto-Fit nach SetMaze"
+```
+
+---
+
+## Abnahme-Smoke-Test (alle vier Phasen zusammen)
+
+Nach Abschluss aller Phasen sollten folgende Szenarien einwandfrei laufen:
 
 - [ ] **Smoke 1: Klein, animiert** — `25×25 Recursive Backtracker`, Tempo 30, 3D-Ansicht beim Start. Erwartet: Animation flüssig in 2D, Auto-Fit zeigt das ganze Maze in 3D.
 - [ ] **Smoke 2: Mittelgroß, throttled** — `300×300 BFS-Solver`. Erwartet: 2D-Animation läuft mit ~30 Hz Refresh, kein FPS-Einbruch.
 - [ ] **Smoke 3: Groß, ungebremst** — `1000×1000 Recursive Backtracker` mit "Ohne Tempolimit". Erwartet: UI friert ein paar Sekunden ein, danach komplettes Maze sichtbar in 2D, Stoppuhr zeigt plausible Zeit.
 - [ ] **Smoke 4: Groß in 3D** — Nach Smoke 3 `3D-Ansicht` aktivieren. Erwartet: 3D-Aufbau in <2 s, Kamera auf Auto-Fit-Position, Maze vollständig im Bild.
 - [ ] **Smoke 5: Kamera-Steuerung in 3D** — Im 1000×1000-3D mit WASD frei bewegen, RMB-Maus drehen, Mausrad zoomen. Erwartet: alle Eingaben reagieren, Performance stabil.
+- [ ] **Smoke 6: Kamera-Steuerung in 2D** — Im 1000×1000-2D mit WASD pannen, Shift+WASD beschleunigt, RMB-Drag mit Maus pannt, Mausrad zoomt mit Maus-Pivot. Erwartet: Maze nach Auto-Fit komplett sichtbar, Hineinzoomen zeigt einzelne Zellen, Punkt unter Cursor bleibt beim Zoomen stationär.
 
 Wenn alle fünf Smoke-Tests bestehen, sind Phasen 12–14 fertig.
