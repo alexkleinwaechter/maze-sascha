@@ -31,4 +31,68 @@ public partial class CameraController3D : Camera3D
         _pitch = euler.X;
         _yaw = euler.Y;
     }
+
+    public override void _Process(double delta)
+    {
+        HandleMovement(delta);
+        HandleKeyboardLook(delta);
+        ApplyRotation();
+    }
+
+    // Hinweis: Vector3.Forward ist in Godot (0, 0, -1), deshalb erhoeht
+    // W -> Vector3.Forward die lokale -Z-Position via Translate korrekt = vorwaerts.
+    private void HandleMovement(double delta)
+    {
+        // Eingabe als 3D-Richtungsvektor aufbauen:
+        //   Vorwaerts/zurueck (W/S)  -> lokale -Z/+Z (forward/back)
+        //   Seitwaerts (A/D)         -> lokale -X/+X (left/right)
+        //   Vertikal (Q/E)            -> Welt-Y (E hoch, Q runter)
+        Vector3 input = Vector3.Zero;
+        if (Input.IsPhysicalKeyPressed(Key.W)) input += Vector3.Forward;
+        if (Input.IsPhysicalKeyPressed(Key.S)) input += Vector3.Back;
+        if (Input.IsPhysicalKeyPressed(Key.A)) input += Vector3.Left;
+        if (Input.IsPhysicalKeyPressed(Key.D)) input += Vector3.Right;
+
+        // QE bewegen sich entlang Welt-Y, unabhaengig vom Pitch der Kamera.
+        Vector3 worldVertical = Vector3.Zero;
+        if (Input.IsPhysicalKeyPressed(Key.E)) worldVertical += Vector3.Up;
+        if (Input.IsPhysicalKeyPressed(Key.Q)) worldVertical += Vector3.Down;
+
+        if (input == Vector3.Zero && worldVertical == Vector3.Zero)
+            return;
+
+        float speed = MoveSpeed;
+        if (Input.IsPhysicalKeyPressed(Key.Shift))
+            speed *= SprintMultiplier;
+
+        // Horizontaler Anteil: in Kamera-Lokalkoordinaten transformieren.
+        if (input != Vector3.Zero)
+        {
+            input = input.Normalized();
+            Translate(input * speed * (float)delta);
+        }
+
+        // Vertikaler Anteil: direkt in Weltkoordinaten addieren.
+        if (worldVertical != Vector3.Zero)
+            Position += worldVertical.Normalized() * speed * (float)delta;
+    }
+
+    private void HandleKeyboardLook(double delta)
+    {
+        // Pfeiltasten als Maus-Backup. Funktioniert immer, auch ohne RMB.
+        float yawDelta = 0f;
+        float pitchDelta = 0f;
+        if (Input.IsPhysicalKeyPressed(Key.Left))  yawDelta   += KeyTurnSpeed * (float)delta;
+        if (Input.IsPhysicalKeyPressed(Key.Right)) yawDelta   -= KeyTurnSpeed * (float)delta;
+        if (Input.IsPhysicalKeyPressed(Key.Up))    pitchDelta += KeyTurnSpeed * (float)delta;
+        if (Input.IsPhysicalKeyPressed(Key.Down))  pitchDelta -= KeyTurnSpeed * (float)delta;
+        _yaw += yawDelta;
+        _pitch = Mathf.Clamp(_pitch + pitchDelta, -1.4f, 1.4f);
+    }
+
+    private void ApplyRotation()
+    {
+        // Rotation immer komplett aus Yaw/Pitch aufbauen, nicht inkrementell.
+        Basis = Basis.FromEuler(new Vector3(_pitch, _yaw, 0));
+    }
 }
