@@ -95,4 +95,49 @@ public partial class CameraController3D : Camera3D
         // Rotation immer komplett aus Yaw/Pitch aufbauen, nicht inkrementell.
         Basis = Basis.FromEuler(new Vector3(_pitch, _yaw, 0));
     }
+
+    public override void _UnhandledInput(InputEvent @event)
+    {
+        // RMB druecken/loslassen schaltet Mouse-Look an/aus.
+        if (@event is InputEventMouseButton mb)
+        {
+            if (mb.ButtonIndex == MouseButton.Right)
+            {
+                _mouseLook = mb.Pressed;
+                Input.MouseMode = mb.Pressed ? Input.MouseModeEnum.Captured : Input.MouseModeEnum.Visible;
+                return;
+            }
+
+            // Mausrad als Dolly: bewegt die Kamera entlang der lokalen Forward-Achse.
+            if (mb.Pressed && (mb.ButtonIndex == MouseButton.WheelUp || mb.ButtonIndex == MouseButton.WheelDown))
+            {
+                float step = ZoomStep;
+                if (Input.IsPhysicalKeyPressed(Key.Shift))
+                    step *= ZoomSprintMultiplier;
+
+                // WheelUp = naeher heran (vorwaerts), WheelDown = weiter weg (rueckwaerts).
+                Vector3 direction = mb.ButtonIndex == MouseButton.WheelUp ? Vector3.Forward : Vector3.Back;
+                Translate(direction * step);
+                return;
+            }
+        }
+
+        // Maus-Bewegung im Look-Modus aendert Yaw/Pitch.
+        if (@event is InputEventMouseMotion motion && _mouseLook)
+        {
+            _yaw -= motion.Relative.X * MouseSensitivity;
+            _pitch = Mathf.Clamp(_pitch - motion.Relative.Y * MouseSensitivity, -1.4f, 1.4f);
+        }
+    }
+
+    public override void _Notification(int what)
+    {
+        // Wenn das Fenster den Fokus verliert (Alt-Tab), den Cursor freigeben,
+        // sonst klemmt die Maus unsichtbar im Spielbereich.
+        if (what == NotificationApplicationFocusOut && _mouseLook)
+        {
+            _mouseLook = false;
+            Input.MouseMode = Input.MouseModeEnum.Visible;
+        }
+    }
 }
