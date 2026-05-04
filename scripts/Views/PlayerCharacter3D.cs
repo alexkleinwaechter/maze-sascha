@@ -18,8 +18,16 @@ public partial class PlayerCharacter3D : Node3D
     /// <summary>Geschwindigkeit in Zellen pro Sekunde.</summary>
     [Export] public float MoveSpeed = 4f;
 
-    /// <summary>Y-Anhebung der Figur. Capsule mit Hoehe 1.0 sitzt mit Mitte auf 0.5.</summary>
-    [Export] public float StandHeight = 0.5f;
+    /// <summary>Y-Anhebung der Figur. Lego-Figur hat Boden auf Y=0, daher 0.0.</summary>
+    [Export] public float StandHeight = 0.0f;
+
+    // ---- Phase 19: LegoFigure-Referenz ----
+    private LegoFigure _figure;
+
+    public override void _Ready()
+    {
+        _figure = GetNodeOrNull<LegoFigure>("Figure");
+    }
 
     // ---- Modus-Enum (Phase 17) ----
     public enum Mode
@@ -138,6 +146,7 @@ public partial class PlayerCharacter3D : Node3D
 
     private void ProcessFollowPath(double delta)
     {
+        _figure?.SetWalking(_isMoving);
         if (!_isMoving) return;
 
         Vector3 target = _waypoints[_currentIndex];
@@ -161,10 +170,14 @@ public partial class PlayerCharacter3D : Node3D
         {
             Position += toTarget.Normalized() * step;
         }
+
+        // Figur in Laufrichtung drehen.
+        FaceDirection(toTarget);
     }
 
     private void ProcessManual(double delta)
     {
+        _figure?.SetWalking(_isAnimatingCell);
         if (_isAnimatingCell)
         {
             _animElapsed += (float)delta;
@@ -198,6 +211,9 @@ public partial class PlayerCharacter3D : Node3D
         // Animation starten. Dauer = 1 / MoveSpeed (Sekunden pro Zelle).
         _animFrom = Position;
         _animTo = CellToWorld(next);
+
+        // Figur sofort in Bewegungsrichtung drehen (beim ersten Frame der Animation).
+        FaceDirection(_animTo - _animFrom);
         _animElapsed = 0f;
         _animDuration = 1f / Mathf.Max(0.5f, MoveSpeed);
         _isAnimatingCell = true;
@@ -267,6 +283,13 @@ public partial class PlayerCharacter3D : Node3D
             best = Direction.East;
 
         return best;
+    }
+
+    /// <summary>Dreht den Knoten so, dass er in die angegebene Richtung schaut (XZ-Ebene).</summary>
+    private void FaceDirection(Vector3 direction)
+    {
+        if (direction.LengthSquared() < 0.0001f) return;
+        Rotation = new Vector3(0f, Mathf.Atan2(direction.X, direction.Z), 0f);
     }
 
     /// <summary>Konvertiert Grid-Koordinaten in Welt-Koordinaten gemaess MazeView3D-Konvention.</summary>
