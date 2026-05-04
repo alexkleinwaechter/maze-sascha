@@ -19,6 +19,7 @@ public partial class Hud : CanvasLayer
     [Signal] public delegate void ResetRequestedEventHandler();
     [Signal] public delegate void UnboundedModeChangedEventHandler(bool unbounded);
     [Signal] public delegate void FollowCamToggleEventHandler(bool enabled);
+    [Signal] public delegate void PlayManualToggleEventHandler(bool active);
 
     // ---- Knotenreferenzen (in _Ready aufgeloest) ----
     private HSlider _widthSlider = null!;
@@ -37,6 +38,8 @@ public partial class Hud : CanvasLayer
     private CheckBox _heatmapToggle = null!;
     private CheckBox _unboundedToggle = null!;
     private CheckBox _followCamToggle = null!;
+    private Button _playManualButton = null!;
+    private Label _victoryLabel = null!;
     private Label _widthLabel = null!;
     private Label _heightLabel = null!;
     private Label _speedLabel = null!;
@@ -62,6 +65,8 @@ public partial class Hud : CanvasLayer
         _speedLabel = GetNode<Label>("Root/Margin/VBox/SpeedRow/SpeedLabel");
         _unboundedToggle = GetNode<CheckBox>("Root/Margin/VBox/SpeedRow/UnboundedToggle");
         _followCamToggle = GetNode<CheckBox>("Root/Margin/VBox/Algos/FollowCamToggle");
+        _playManualButton = GetNode<Button>("Root/Margin/VBox/Buttons/PlayManualButton");
+        _victoryLabel = GetNode<Label>("Root/Margin/VBox/VictoryLabel");
 
         // ---- Slider-Werte initial sicherstellen ----
         _widthSlider.MinValue = 5;
@@ -110,6 +115,7 @@ public partial class Hud : CanvasLayer
         _heatmapToggle.Toggled += OnHeatmapToggled;
         _unboundedToggle.Toggled += OnUnboundedToggled;
         _followCamToggle.Toggled += OnFollowCamToggled;
+        _playManualButton.Toggled += OnPlayManualToggled;
 
         FillGeneratorChooser();
         FillSolverChooser();
@@ -197,6 +203,19 @@ public partial class Hud : CanvasLayer
 
     private void OnFollowCamToggled(bool enabled) =>
         EmitSignal(SignalName.FollowCamToggle, enabled);
+
+    private void OnPlayManualToggled(bool active)
+    {
+        _victoryLabel.Text = ""; // alte Sieg-Anzeige verbergen, sobald neu gestartet wird
+        EmitSignal(SignalName.PlayManualToggle, active);
+    }
+
+    public void ShowVictory(double seconds)
+    {
+        _victoryLabel.Text = $"Geschafft in {seconds:0.00} s!";
+        // Den Button automatisch zurueckstellen, damit man direkt einen neuen Run starten kann.
+        _playManualButton.SetPressedNoSignal(false);
+    }
 
     private void FillGeneratorChooser()
     {

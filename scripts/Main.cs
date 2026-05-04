@@ -45,6 +45,9 @@ public partial class Main : Node
     private PlayerCharacter3D _player = null!;
     private readonly List<Cell> _solverPath = new();
 
+    private bool _isManualMode;
+    private double _manualStartTimeSeconds;
+
     private readonly Random _random = new();
     private readonly PerformanceTracker _tracker = new();
     private bool _suppressViewRefresh;
@@ -70,6 +73,7 @@ public partial class Main : Node
         _hud.HeatmapToggle += OnHeatmapToggled;
         _hud.UnboundedModeChanged += OnUnboundedModeChanged;
         _hud.FollowCamToggle += OnFollowCamToggled;
+        _hud.PlayManualToggle += OnPlayManualToggle;
 
         _player = GetNode<PlayerCharacter3D>("MazeView3D/Player");
         _player.GoalReached += OnBotGoalReached;
@@ -312,7 +316,62 @@ public partial class Main : Node
 
     private void OnBotGoalReached()
     {
+        if (_isManualMode)
+        {
+            double elapsed = Time.GetTicksMsec() / 1000.0 - _manualStartTimeSeconds;
+            _hud.ShowVictory(elapsed);
+            OnStopManualRequested();
+            return;
+        }
+
         GD.Print("[Main] Bot ist am Ziel angekommen.");
+    }
+
+    private void OnPlayManualToggle(bool active)
+    {
+        if (active) OnPlayManualRequested();
+        else OnStopManualRequested();
+    }
+
+    private void OnPlayManualRequested()
+    {
+        if (_currentMaze == null)
+        {
+            GD.PrintErr("[Main] Kein Maze - bitte erst Erstellen.");
+            return;
+        }
+
+        // Solver-Bot anhalten und Pfad-Markierung visuell zuruecksetzen,
+        // damit der Spieler nicht entlang einer Loesungsspur gefuehrt wird.
+        _runner.StopAll();
+        _currentMaze.ResetSolverState();
+        _solverStart = _currentMaze.GetCell(0, 0);
+        _solverGoal = _currentMaze.GetCell(_currentMaze.Width - 1, _currentMaze.Height - 1);
+        _solverStart.State = CellState.Start;
+        _solverGoal.State = CellState.Goal;
+        _view2D.ForceRefresh();
+        if (_view3D.Visible)
+            _view3D.SetMaze(_currentMaze);
+
+        _player.EnableManualMode(_currentMaze, _solverStart, _solverGoal, _view3D.CellSize);
+        _isManualMode = true;
+        _manualStartTimeSeconds = Time.GetTicksMsec() / 1000.0;
+
+        // Verfolger-Kamera ist im Manual-Modus zwingend an, sonst sieht der Spieler nichts.
+        var camera = _view3D.GetNode<CameraController3D>("Camera3D");
+        camera.EnableFollow(_player);
+
+        GD.Print("[Main] Selbst spielen aktiviert.");
+    }
+
+    private void OnStopManualRequested()
+    {
+        if (!_isManualMode) return;
+        _player.DisableManualMode();
+        _isManualMode = false;
+        var camera = _view3D.GetNode<CameraController3D>("Camera3D");
+        camera.DisableFollow();
+        GD.Print("[Main] Selbst spielen beendet.");
     }
 
     private void OnFollowCamToggled(bool enabled)

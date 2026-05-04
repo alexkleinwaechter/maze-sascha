@@ -21,10 +21,33 @@ public partial class PlayerCharacter3D : Node3D
     /// <summary>Y-Anhebung der Figur. Capsule mit Hoehe 1.0 sitzt mit Mitte auf 0.5.</summary>
     [Export] public float StandHeight = 0.5f;
 
+    // ---- Modus-Enum (Phase 17) ----
+    public enum Mode
+    {
+        Idle,
+        FollowingPath,
+        Manual
+    }
+
+    public Mode CurrentMode { get; private set; } = Mode.Idle;
+
+    // ---- Felder fuer den FollowingPath-Modus ----
     private readonly List<Vector3> _waypoints = new();
     private int _currentIndex;
     private bool _isMoving;
     private float _cellSize = 1f;
+
+    // ---- Felder fuer den Manual-Modus (Phase 17) ----
+    private Model.Maze _manualMaze;
+    private Cell _manualCell;
+    private Cell _manualGoal;
+
+    // Cell-Lerp-Zustand: nur eine Zelle pro Tastendruck.
+    private bool _isAnimatingCell;
+    private Vector3 _animFrom;
+    private Vector3 _animTo;
+    private float _animElapsed;
+    private float _animDuration;
 
     /// <summary>
     /// Beendet jede laufende Animation und versteckt die Figur.
@@ -34,6 +57,11 @@ public partial class PlayerCharacter3D : Node3D
     {
         _waypoints.Clear();
         _isMoving = false;
+        _manualMaze = null;
+        _manualCell = null;
+        _manualGoal = null;
+        _isAnimatingCell = false;
+        CurrentMode = Mode.Idle;
         Visible = false;
     }
 
@@ -53,6 +81,7 @@ public partial class PlayerCharacter3D : Node3D
         {
             Visible = false;
             _isMoving = false;
+            CurrentMode = Mode.Idle;
             return;
         }
 
@@ -60,9 +89,54 @@ public partial class PlayerCharacter3D : Node3D
         Visible = true;
         _currentIndex = 1;
         _isMoving = _waypoints.Count > 1;
+        CurrentMode = Mode.FollowingPath;
+    }
+
+    /// <summary>
+    /// Aktiviert den Manual-Modus. Die Figur springt an die Startzelle und reagiert
+    /// ab sofort auf WASD-Eingaben in <see cref="_Process"/>. <paramref name="goal"/>
+    /// wird beim Erreichen mit dem GoalReached-Signal quittiert.
+    /// </summary>
+    public void EnableManualMode(Model.Maze maze, Cell start, Cell goal, float cellSize)
+    {
+        _cellSize = cellSize;
+        _manualMaze = maze;
+        _manualCell = start;
+        _manualGoal = goal;
+        _isAnimatingCell = false;
+        _waypoints.Clear();
+        _isMoving = false;
+
+        Position = CellToWorld(start);
+        Visible = true;
+        CurrentMode = Mode.Manual;
+    }
+
+    /// <summary>Beendet den Manual-Modus und versteckt die Figur.</summary>
+    public void DisableManualMode()
+    {
+        _manualMaze = null;
+        _manualCell = null;
+        _manualGoal = null;
+        _isAnimatingCell = false;
+        Visible = false;
+        CurrentMode = Mode.Idle;
     }
 
     public override void _Process(double delta)
+    {
+        switch (CurrentMode)
+        {
+            case Mode.FollowingPath:
+                ProcessFollowPath(delta);
+                break;
+            case Mode.Manual:
+                ProcessManual(delta);
+                break;
+        }
+    }
+
+    private void ProcessFollowPath(double delta)
     {
         if (!_isMoving) return;
 
@@ -79,6 +153,7 @@ public partial class PlayerCharacter3D : Node3D
             if (_currentIndex >= _waypoints.Count)
             {
                 _isMoving = false;
+                CurrentMode = Mode.Idle;
                 EmitSignal(SignalName.GoalReached);
             }
         }
@@ -86,6 +161,51 @@ public partial class PlayerCharacter3D : Node3D
         {
             Position += toTarget.Normalized() * step;
         }
+    }
+
+    private void ProcessManual(double delta)
+    {
+        if (_isAnimatingCell)
+        {
+            _animElapsed += (float)delta;
+            float t = Mathf.Clamp(_animElapsed / _animDuration, 0f, 1f);
+            Position = _animFrom.Lerp(_animTo, t);
+
+            if (t >= 1f)
+            {
+                _isAnimatingCell = false;
+                Position = _animTo;
+                // Sieg pruefen: Ist die aktuelle Zelle das Ziel?
+                if (_manualCell == _manualGoal)
+                    EmitSignal(SignalName.GoalReached);
+            }
+            return;
+        }
+
+        // Eingabe einlesen. Vorrang: oben (W) > unten (S) > links (A) > rechts (D).
+        // Damit gibt's bei zwei gleichzeitig gedrueckten Tasten ein deterministisches Verhalten.
+        Direction? dir = null;
+        if (Input.IsPhysicalKeyPressed(Key.W)) dir = Direction.North;
+        else if (Input.IsPhysicalKeyPressed(Key.S)) dir = Direction.South;
+        else if (Input.IsPhysicalKeyPressed(Key.A)) dir = Direction.West;
+        else if (Input.IsPhysicalKeyPressed(Key.D)) dir = Direction.East;
+
+        if (dir is null) return;
+
+        // Wandkollision pruefen: HasWall == true bedeutet, die Wand ist noch vorhanden.
+        if (_manualCell.HasWall(dir.Value))
+            return;
+
+        Cell next = _manualMaze.GetNeighbor(_manualCell, dir.Value);
+        if (next == null) return;
+
+        // Animation starten. Dauer = 1 / MoveSpeed (Sekunden pro Zelle).
+        _animFrom = Position;
+        _animTo = CellToWorld(next);
+        _animElapsed = 0f;
+        _animDuration = 1f / Mathf.Max(0.5f, MoveSpeed);
+        _isAnimatingCell = true;
+        _manualCell = next;
     }
 
     /// <summary>Konvertiert Grid-Koordinaten in Welt-Koordinaten gemaess MazeView3D-Konvention.</summary>
