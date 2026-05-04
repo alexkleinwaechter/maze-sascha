@@ -73,6 +73,7 @@ public partial class Main : Node
         _hud.HeatmapToggle += OnHeatmapToggled;
         _hud.UnboundedModeChanged += OnUnboundedModeChanged;
         _hud.FollowCamToggle += OnFollowCamToggled;
+        _hud.ExploreModeToggle += OnExploreModeToggled;
         _hud.PlayManualToggle += OnPlayManualToggle;
 
         _player = GetNode<PlayerCharacter3D>("MazeView3D/Player");
@@ -381,5 +382,10 @@ public partial class Main : Node
             camera.EnableFollow(_player);
         else
             camera.DisableFollow();
+    }
+
+    private void OnExploreModeToggled(bool enabled)
+    {
+        _view3D.SetExploreMode(enabled);
     }
 }

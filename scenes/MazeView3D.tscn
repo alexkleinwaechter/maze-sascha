@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3 uid="uid://b0maze0view3d"]
+[gd_scene load_steps=9 format=3 uid="uid://b0maze0view3d"]
 
 [ext_resource type="Script" path="res://scripts/Views/MazeView3D.cs" id="1_view3d"]
 [ext_resource type="Script" path="res://scripts/Views/CameraController3D.cs" id="2_camctl"]
@@ -21,6 +21,16 @@ mesh = SubResource("BoxMesh_horizontal")
 [sub_resource type="MultiMesh" id="MultiMesh_vertical"]
 transform_format = 1
 mesh = SubResource("BoxMesh_vertical")
+
+[sub_resource type="Environment" id="Env_explore"]
+background_mode = 1
+background_color = Color(0.02, 0.02, 0.04, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.4, 0.45, 0.55, 1)
+ambient_light_energy = 0.4
+fog_enabled = false
+fog_light_color = Color(0.05, 0.05, 0.08, 1)
+fog_density = 0.06
 
 [node name="MazeView3D" type="Node3D"]
 visible = false
@@ -51,3 +61,12 @@ script = ExtResource("3_player")
 
 [node name="Mesh" type="MeshInstance3D" parent="Player"]
 mesh = SubResource("CapsuleMesh_player")
+
+[node name="PlayerLight" type="OmniLight3D" parent="Player"]
+visible = false
+omni_range = 6.5
+light_energy = 1.6
+light_color = Color(1, 0.92, 0.78, 1)
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env_explore")

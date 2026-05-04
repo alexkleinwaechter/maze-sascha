@@ -18,7 +18,14 @@ public partial class MazeView3D : Node3D
     private MultiMeshInstance3D _wallsHorizontal = null!;
     private MultiMeshInstance3D _wallsVertical = null!;
     private CameraController3D _camera = null!;
+    private DirectionalLight3D _sun = null!;
+    private OmniLight3D _playerLight = null!;
+    private WorldEnvironment _worldEnv = null!;
     private Model.Maze _maze = null!;
+
+    private bool _exploreTarget;
+    private float _exploreFactor;
+    private const float ExploreLerpSpeed = 1.6f; // ~0.6s fuer 0->1
 
     private static readonly StandardMaterial3D WallMaterial = new()
     {
@@ -37,6 +44,9 @@ public partial class MazeView3D : Node3D
         _wallsHorizontal = GetNode<MultiMeshInstance3D>("WallContainer/WallsHorizontal");
         _wallsVertical = GetNode<MultiMeshInstance3D>("WallContainer/WallsVertical");
         _camera = GetNode<CameraController3D>("Camera3D");
+        _sun = GetNode<DirectionalLight3D>("Sun");
+        _playerLight = GetNode<OmniLight3D>("Player/PlayerLight");
+        _worldEnv = GetNode<WorldEnvironment>("WorldEnvironment");
 
         // Material zuweisen - die in der .tscn voreingestellten BoxMeshes haben bewusst kein Material,
         // damit die Farbe zentral hier gesetzt werden kann.
@@ -48,6 +58,19 @@ public partial class MazeView3D : Node3D
         // Editor-Platzhalter.
         ((BoxMesh)_wallsHorizontal.Multimesh.Mesh).Size = new Vector3(CellSize, WallHeight, WallThickness);
         ((BoxMesh)_wallsVertical.Multimesh.Mesh).Size = new Vector3(WallThickness, WallHeight, CellSize);
+
+        ApplyExploreFactor(0f);
+    }
+
+    public override void _Process(double delta)
+    {
+        float target = _exploreTarget ? 1f : 0f;
+        if (Mathf.IsEqualApprox(_exploreFactor, target))
+            return;
+
+        float lerpStep = ExploreLerpSpeed * (float)delta;
+        _exploreFactor = Mathf.MoveToward(_exploreFactor, target, lerpStep);
+        ApplyExploreFactor(_exploreFactor);
     }
 
     public void SetMaze(Model.Maze maze)
@@ -136,4 +159,23 @@ public partial class MazeView3D : Node3D
 
     private Transform3D VerticalWallTransform(float centerX, float centerZ) =>
         new(Basis.Identity, new Vector3(centerX, WallHeight / 2f, centerZ));
+
+    /// <summary>
+    /// Setzt den Zielzustand fuer den Entdeckungs-Modus.
+    /// Die visuelle Uebergangsanimation laeuft in _Process.
+    /// </summary>
+    public void SetExploreMode(bool enabled) => _exploreTarget = enabled;
+
+    private void ApplyExploreFactor(float factor)
+    {
+        var env = _worldEnv.Environment;
+        _sun.LightEnergy = Mathf.Lerp(1.0f, 0.05f, factor);
+        env.AmbientLightEnergy = Mathf.Lerp(0.4f, 0.05f, factor);
+        _playerLight.LightEnergy = Mathf.Lerp(0f, 1.6f, factor);
+        _playerLight.Visible = factor > 0.01f;
+
+        // Fog wird ueber Density eingeblendet, damit der Uebergang weich bleibt.
+        env.FogEnabled = factor > 0.01f;
+        env.FogDensity = Mathf.Lerp(0f, 0.06f, factor);
+    }
 }
