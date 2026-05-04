@@ -76,13 +76,14 @@ public partial class CameraController3D : Camera3D
 
         Vector3 desiredPos = targetPos + orbitOffset;
 
-        // Smooth lerp: Annaeherungsgeschwindigkeit haengt von delta UND dem
-        // Smoothing-Faktor ab; je weiter weg, desto schneller wird aufgeholt.
-        float lerpFactor = 1f - Mathf.Exp(-FollowSmoothing * (float)delta);
-        GlobalPosition = GlobalPosition.Lerp(desiredPos, lerpFactor);
+        // Im Follow-Modus den Spieler ohne Nachlauf mitfuehren,
+        // damit er stabil im View-Zentrum bleibt.
+        GlobalPosition = desiredPos;
 
-        // Zum Target-Mittelpunkt blicken, leicht nach oben korrigiert.
-        LookAt(targetPos + new Vector3(0, 0.3f, 0), Vector3.Up);
+        // Ausrichtung folgt nur dem Orbit-Winkel, nicht der momentanen Zielposition.
+        // So richtet sich die Welt beim Laufen nicht staendig neu aus.
+        Vector3 desiredForward = -orbitOffset.Normalized();
+        LookAt(GlobalPosition + desiredForward, Vector3.Up);
 
         // Yaw/Pitch synchron halten, damit der Wechsel zurueck in den Free-Modus
         // direkt an der aktuellen Blickrichtung weitermacht statt zurueckzuspringen.
@@ -276,10 +277,23 @@ public partial class CameraController3D : Camera3D
         _followTarget = target;
         FollowMode = true;
 
-        // Orbit-Radius und -Winkel aus den Export-Feldern initialisieren.
-        _followOrbitRadius = Mathf.Sqrt(FollowHeight * FollowHeight + FollowDistance * FollowDistance);
-        _followOrbitPitch  = Mathf.Atan2(FollowHeight, FollowDistance);
-        _followOrbitYaw    = 0f;
+        // Orbit aus der aktuellen Kamera-Position zum Target initialisieren,
+        // damit das Aktivieren keinen sichtbaren Sprung verursacht.
+        Vector3 offset = GlobalPosition - target.GlobalPosition;
+        float radius = offset.Length();
+
+        if (radius < 0.001f)
+        {
+            _followOrbitRadius = Mathf.Sqrt(FollowHeight * FollowHeight + FollowDistance * FollowDistance);
+            _followOrbitPitch = Mathf.Atan2(FollowHeight, FollowDistance);
+            _followOrbitYaw = 0f;
+        }
+        else
+        {
+            _followOrbitRadius = radius;
+            _followOrbitPitch = Mathf.Clamp(Mathf.Asin(offset.Y / radius), 0.05f, Mathf.Pi / 2f - 0.05f);
+            _followOrbitYaw = Mathf.Atan2(offset.X, offset.Z);
+        }
 
         // Maus-Look sicher abschalten, damit der Cursor nicht im Spielbereich klemmt.
         if (_mouseLook)

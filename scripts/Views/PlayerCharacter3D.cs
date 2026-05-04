@@ -182,15 +182,11 @@ public partial class PlayerCharacter3D : Node3D
             return;
         }
 
-        // Eingabe einlesen. Vorrang: oben (W) > unten (S) > links (A) > rechts (D).
-        // Damit gibt's bei zwei gleichzeitig gedrueckten Tasten ein deterministisches Verhalten.
-        Direction? dir = null;
-        if (Input.IsPhysicalKeyPressed(Key.W)) dir = Direction.North;
-        else if (Input.IsPhysicalKeyPressed(Key.S)) dir = Direction.South;
-        else if (Input.IsPhysicalKeyPressed(Key.A)) dir = Direction.West;
-        else if (Input.IsPhysicalKeyPressed(Key.D)) dir = Direction.East;
-
-        if (dir is null) return;
+        // Eingabe in eine Welt-Richtung aus Kamerasicht umrechnen und dann auf die
+        // vier Maze-Richtungen quantisieren (North/South/West/East).
+        Direction? dir = GetManualDirectionFromView();
+        if (dir is null)
+            return;
 
         // Wandkollision pruefen: HasWall == true bedeutet, die Wand ist noch vorhanden.
         if (_manualCell.HasWall(dir.Value))
@@ -206,6 +202,71 @@ public partial class PlayerCharacter3D : Node3D
         _animDuration = 1f / Mathf.Max(0.5f, MoveSpeed);
         _isAnimatingCell = true;
         _manualCell = next;
+    }
+
+    private Direction? GetManualDirectionFromView()
+    {
+        // Vorrang bleibt deterministisch wie zuvor: W > S > A > D.
+        Camera3D camera = GetViewport().GetCamera3D();
+        Vector3 forward = GetPlanarForward(camera);
+        Vector3 right = GetPlanarRight(camera);
+
+        Vector3 inputWorld;
+        if (Input.IsPhysicalKeyPressed(Key.W)) inputWorld = forward;
+        else if (Input.IsPhysicalKeyPressed(Key.S)) inputWorld = -forward;
+        else if (Input.IsPhysicalKeyPressed(Key.A)) inputWorld = -right;
+        else if (Input.IsPhysicalKeyPressed(Key.D)) inputWorld = right;
+        else return null;
+
+        return QuantizeWorldDirectionToMaze(inputWorld);
+    }
+
+    private static Vector3 GetPlanarForward(Camera3D camera)
+    {
+        if (camera == null)
+            return Vector3.Forward;
+
+        Vector3 forward = -camera.GlobalTransform.Basis.Z;
+        forward.Y = 0f;
+        return forward.LengthSquared() < 0.0001f ? Vector3.Forward : forward.Normalized();
+    }
+
+    private static Vector3 GetPlanarRight(Camera3D camera)
+    {
+        if (camera == null)
+            return Vector3.Right;
+
+        Vector3 right = camera.GlobalTransform.Basis.X;
+        right.Y = 0f;
+        return right.LengthSquared() < 0.0001f ? Vector3.Right : right.Normalized();
+    }
+
+    private static Direction QuantizeWorldDirectionToMaze(Vector3 direction)
+    {
+        // Godot-Weltachsen fuer das Grid:
+        //   North = -Z, South = +Z, West = -X, East = +X.
+        float northScore = direction.Dot(Vector3.Forward);
+        float southScore = direction.Dot(Vector3.Back);
+        float westScore = direction.Dot(Vector3.Left);
+        float eastScore = direction.Dot(Vector3.Right);
+
+        Direction best = Direction.North;
+        float bestScore = northScore;
+
+        if (southScore > bestScore)
+        {
+            best = Direction.South;
+            bestScore = southScore;
+        }
+        if (westScore > bestScore)
+        {
+            best = Direction.West;
+            bestScore = westScore;
+        }
+        if (eastScore > bestScore)
+            best = Direction.East;
+
+        return best;
     }
 
     /// <summary>Konvertiert Grid-Koordinaten in Welt-Koordinaten gemaess MazeView3D-Konvention.</summary>
