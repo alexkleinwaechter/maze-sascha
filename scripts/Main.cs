@@ -43,10 +43,13 @@ public partial class Main : Node
     private Cell _solverGoal = null!;
 
     private PlayerCharacter3D _player = null!;
+    private FirstPersonCameraController _fpCamera = null!;
+    private CameraController3D _orbitCamera = null!;
     private readonly List<Cell> _solverPath = new();
 
     private bool _isManualMode;
     private double _manualStartTimeSeconds;
+    private bool _firstPersonActive;
 
     private readonly Random _random = new();
     private readonly PerformanceTracker _tracker = new();
@@ -75,9 +78,12 @@ public partial class Main : Node
         _hud.FollowCamToggle += OnFollowCamToggled;
         _hud.ExploreModeToggle += OnExploreModeToggled;
         _hud.PlayManualToggle += OnPlayManualToggle;
+        _hud.FirstPersonToggle += OnFirstPersonToggled;
 
         _player = GetNode<PlayerCharacter3D>("MazeView3D/Player");
         _player.GoalReached += OnBotGoalReached;
+        _orbitCamera = _view3D.GetNode<CameraController3D>("Camera3D");
+        _fpCamera = _view3D.GetNode<FirstPersonCameraController>("Player/HeadAnchor/FirstPersonCamera");
 
         _runner.GenerationStepProduced += OnGenerationStepProduced;
         _runner.GenerationFinished += OnGenerationFinished;
@@ -300,6 +306,18 @@ public partial class Main : Node
         // Falls 3D eingeschaltet wird, aber noch kein SetMaze lief (z. B. Reset), sicherstellen.
         if (use3D && _currentMaze != null)
             _view3D.SetMaze(_currentMaze);
+
+        // FPS-Modus beim Verlassen der 3D-Ansicht zwangsweise abschalten,
+        // sonst bleibt der Cursor eingefangen.
+        if (!use3D && _firstPersonActive)
+        {
+            _fpCamera.Deactivate();
+            _orbitCamera.MakeCurrent();
+            _firstPersonActive = false;
+            _player.ExternalBodyYaw = false;
+            _hud.SetFirstPersonPressed(false);
+        }
+
         GD.Print($"[Main] 3D-Ansicht = {use3D}");
     }
 
@@ -387,5 +405,44 @@ public partial class Main : Node
     private void OnExploreModeToggled(bool enabled)
     {
         _view3D.SetExploreMode(enabled);
+    }
+
+    private void OnFirstPersonToggled(bool active)
+    {
+        _firstPersonActive = active;
+
+        if (active)
+        {
+            // FPS-Modus benoetigt eine Spielfigur — wenn die Figur nicht sichtbar
+            // ist (kein Solver gelaufen, kein Manual-Mode), erzwingen wir den
+            // Player auf Startzelle, damit ueberhaupt etwas zu sehen ist.
+            if (!_player.Visible)
+            {
+                if (_currentMaze == null)
+                {
+                    GD.PrintErr("[Main] First-Person ohne Maze nicht moeglich.");
+                    _hud.SetFirstPersonPressed(false);
+                    _firstPersonActive = false;
+                    return;
+                }
+                _player.Position = new Vector3(
+                    _view3D.CellSize * 0.5f,
+                    _player.StandHeight,
+                    _view3D.CellSize * 0.5f);
+                _player.Visible = true;
+            }
+
+            // Follow-Cam abschalten — FPS und Follow schliessen sich aus.
+            _orbitCamera.DisableFollow();
+
+            _fpCamera.Activate();
+            _player.ExternalBodyYaw = true;
+        }
+        else
+        {
+            _fpCamera.Deactivate();
+            _orbitCamera.MakeCurrent();
+            _player.ExternalBodyYaw = false;
+        }
     }
 }

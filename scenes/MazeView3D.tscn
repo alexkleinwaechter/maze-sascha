@@ -1,10 +1,11 @@
-[gd_scene load_steps=10 format=3 uid="uid://b0maze0view3d"]
+[gd_scene load_steps=11 format=3 uid="uid://b0maze0view3d"]
 
 [ext_resource type="Script" path="res://scripts/Views/MazeView3D.cs" id="1_view3d"]
 [ext_resource type="Script" path="res://scripts/Views/CameraController3D.cs" id="2_camctl"]
 [ext_resource type="Script" path="res://scripts/Views/PlayerCharacter3D.cs" id="3_player"]
 [ext_resource type="Script" path="res://scripts/Views/LegoFigure.cs" id="4_lego"]
 [ext_resource type="Texture2D" path="res://assets/devedse.png" id="5_atlas"]
+[ext_resource type="Script" path="res://scripts/Views/FirstPersonCameraController.cs" id="6_fpcam"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_horizontal"]
 size = Vector3(1, 1.4, 0.1)
@@ -67,6 +68,15 @@ visible = false
 omni_range = 6.5
 light_energy = 1.6
 light_color = Color(1, 0.92, 0.78, 1)
+
+[node name="HeadAnchor" type="Node3D" parent="Player"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
+
+[node name="FirstPersonCamera" type="Camera3D" parent="Player/HeadAnchor"]
+fov = 75.0
+near = 0.05
+current = false
+script = ExtResource("6_fpcam")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Env_explore")
