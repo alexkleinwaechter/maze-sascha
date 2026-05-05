@@ -28,6 +28,7 @@ public partial class CameraController2D : Camera2D
 
     public override void _Process(double delta)
     {
+        if (!IsVisibleInTree()) return;
         HandlePan(delta);
     }
 

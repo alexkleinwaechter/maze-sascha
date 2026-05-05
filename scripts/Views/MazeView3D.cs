@@ -37,6 +37,10 @@ public partial class MazeView3D : Node3D
         AlbedoColor = new Color("#2c2c2c")
     };
 
+    // Start- und Ziel-Marker werden bei jedem Rebuild neu erstellt.
+    private Node3D _startMarker;
+    private Node3D _goalMarker;
+
     public override void _Ready()
     {
         _wallContainer = GetNode<Node3D>("WallContainer");
@@ -93,6 +97,7 @@ public partial class MazeView3D : Node3D
 
         BuildFloor(_maze);
         BuildWalls(_maze);
+        PlaceMarkers(_maze);
     }
 
     private void BuildFloor(Model.Maze maze)
@@ -165,6 +170,83 @@ public partial class MazeView3D : Node3D
     /// Die visuelle Uebergangsanimation laeuft in _Process.
     /// </summary>
     public void SetExploreMode(bool enabled) => _exploreTarget = enabled;
+
+    // -------------------------------------------------------------------------
+    // Start- / Ziel-Marker
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Platziert leuchtende Marker fuer Start (gruen) und Ziel (gold) auf den
+    /// Eckzellen des Labyrinths. Alte Marker werden vorher entfernt.
+    /// </summary>
+    private void PlaceMarkers(Model.Maze maze)
+    {
+        _startMarker?.QueueFree();
+        _goalMarker?.QueueFree();
+
+        _startMarker = CreateMarker(
+            CellCenter(0, 0),
+            new Color(0.0f, 0.90f, 0.46f),   // gruen
+            new Color(0.41f, 1.0f, 0.68f),    // hell-gruen Licht
+            "Start"
+        );
+        _goalMarker = CreateMarker(
+            CellCenter(maze.Width - 1, maze.Height - 1),
+            new Color(1.0f, 0.84f, 0.0f),     // gold
+            new Color(1.0f, 0.95f, 0.4f),     // gelb Licht
+            "Goal"
+        );
+
+        AddChild(_startMarker);
+        AddChild(_goalMarker);
+    }
+
+    private Vector3 CellCenter(int x, int y) =>
+        new Vector3(x * CellSize + CellSize * 0.5f, 0f, y * CellSize + CellSize * 0.5f);
+
+    /// <summary>
+    /// Erzeugt einen Marker-Node bestehend aus einem leuchtenden Zylinder-Pad
+    /// und einem farbigen OmniLight darueber.
+    /// </summary>
+    private Node3D CreateMarker(Vector3 worldPos, Color color, Color lightColor, string markerName)
+    {
+        var root = new Node3D { Name = markerName };
+        root.Position = worldPos;
+
+        // --- Leuchtende Scheibe ---
+        var pad = new MeshInstance3D();
+        var cylinder = new CylinderMesh
+        {
+            TopRadius    = CellSize * 0.38f,
+            BottomRadius = CellSize * 0.38f,
+            Height       = 0.07f,
+            RadialSegments = 20
+        };
+        pad.Mesh = cylinder;
+        pad.Position = new Vector3(0f, 0.035f, 0f);
+
+        var mat = new StandardMaterial3D
+        {
+            AlbedoColor              = color,
+            EmissionEnabled          = true,
+            Emission                 = color,
+            EmissionEnergyMultiplier = 2.0f
+        };
+        pad.MaterialOverride = mat;
+        root.AddChild(pad);
+
+        // --- Farbiges Punktlicht ---
+        var light = new OmniLight3D
+        {
+            LightColor  = lightColor,
+            LightEnergy = 2.0f,
+            OmniRange   = CellSize * 4.0f,
+            Position    = new Vector3(0f, WallHeight * 0.6f, 0f)
+        };
+        root.AddChild(light);
+
+        return root;
+    }
 
     private void ApplyExploreFactor(float factor)
     {

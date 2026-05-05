@@ -1883,3 +1883,49 @@ Diese Liste ist bewusst *nicht* Teil der Phasen 16–19, soll aber Schuelern und
 - **Phase 21 — Schatzsuche:** N zufaellig verteilte "Muenz"-Knoten im Maze, die der Spieler einsammeln muss, bevor das Goal zaehlt. Bonus-Zeit pro Muenze.
 - **Phase 22 — Geist-Modus:** Der beste eigene Run wird als halbtransparente Geist-Figur aufgenommen und beim naechsten Versuch parallel abgespielt.
 - **Phase 23 — Bestenliste:** Die fuenf besten Zeiten pro Maze-Groesse persistieren in einer JSON-Datei in `user://`.
+
+---
+
+## Nachtraeglich umgesetzte Verbesserungen (2026-05-05)
+
+### Fix: 3D-Kamerasteuerung invertiert (Links/Rechts und Oben/Unten)
+
+**Problem:** Die Links/Rechts-Drehung der 3D-Kamera war gegenueber gaengigen 3D-Spielen invertiert — Maus nach rechts bewegte die Kamera nach links. Gleiches galt fuer die Oben/Unten-Achse.
+
+**Loesung:** In `scripts/Views/CameraController3D.cs` wurden die Vorzeichen fuer alle sechs Stellen geaendert:
+- `HandleKeyboardLook`: Pfeiltaste Links/Rechts `yawDelta` und Pfeiltaste Oben/Unten `pitchDelta` invertiert.
+- `_UnhandledInput` (Free-Modus): `motion.Relative.X * MouseSensitivity` wird addiert statt subtrahiert (Yaw), `motion.Relative.Y` wird addiert statt subtrahiert (Pitch).
+- `HandleFollowInput` (Follow/Orbit-Modus): Vorzeichen fuer `_followOrbitYaw` und `_followOrbitPitch` entsprechend angepasst.
+
+### Feature: Start- und Ziel-Visualisierung im 3D-View
+
+**Motivation:** Im 3D-Modus war bisher nicht erkennbar, welche Zelle Start und welche Ziel ist. Farbige Markierungen mit Beleuchtung machen das sofort intuitiv.
+
+**Umsetzung in `scripts/Views/MazeView3D.cs`:**
+- Neue Methode `PlaceMarkers(Maze)` wird am Ende von `Rebuild()` aufgerufen.
+- Neue Hilfsmethoden `CellCenter(int x, int y)` und `CreateMarker(Vector3, Color, Color, string)`.
+- **Start `(0, 0)`:** gruen leuchtende Zylinderscheibe (emissives Material, `EmissionEnergyMultiplier = 2`) + gruenes `OmniLight3D` (`LightEnergy = 2`, Radius = 4 Zellen).
+- **Ziel `(Width-1, Height-1)`:** goldene Zylinderscheibe + gelbes `OmniLight3D`.
+- Marker werden bei jeder Neugenerierung automatisch neu gesetzt (alte Nodes per `QueueFree()` entfernt).
+
+**Neue Felder:**
+```csharp
+private Node3D _startMarker;
+private Node3D _goalMarker;
+```
+
+### Fix: 2D-Kamera bewegte sich waehrend 3D-Modus
+
+**Problem:** `CameraController2D._Process` pollte `Input.IsPhysicalKeyPressed` auch dann, wenn die 2D-Ansicht nicht sichtbar war (weil der 3D-Modus aktiv war). Dadurch veraenderte sich die 2D-Kameraposition unsichtbar mit, sodass nach dem Zurueckschalten die Ansicht verschoben war.
+
+**Loesung:** In `scripts/Views/CameraController2D.cs` analog zum bereits bestehenden Guard im `CameraController3D`:
+
+```csharp
+public override void _Process(double delta)
+{
+    if (!IsVisibleInTree()) return;
+    HandlePan(delta);
+}
+```
+
+`IsVisibleInTree()` gibt `false` zurueck, sobald `MazeView2D.Visible = false` — damit werden keine Tastatureingaben mehr verarbeitet, wenn die 2D-Ansicht ausgeblendet ist.
