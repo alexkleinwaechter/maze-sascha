@@ -135,10 +135,10 @@ public partial class CameraController3D : Camera3D
         // Pfeiltasten als Maus-Backup. Funktioniert immer, auch ohne RMB.
         float yawDelta = 0f;
         float pitchDelta = 0f;
-        if (Input.IsPhysicalKeyPressed(Key.Left))  yawDelta   += KeyTurnSpeed * (float)delta;
-        if (Input.IsPhysicalKeyPressed(Key.Right)) yawDelta   -= KeyTurnSpeed * (float)delta;
-        if (Input.IsPhysicalKeyPressed(Key.Up))    pitchDelta += KeyTurnSpeed * (float)delta;
-        if (Input.IsPhysicalKeyPressed(Key.Down))  pitchDelta -= KeyTurnSpeed * (float)delta;
+        if (Input.IsPhysicalKeyPressed(Key.Left))  yawDelta   -= KeyTurnSpeed * (float)delta;
+        if (Input.IsPhysicalKeyPressed(Key.Right)) yawDelta   += KeyTurnSpeed * (float)delta;
+        if (Input.IsPhysicalKeyPressed(Key.Up))    pitchDelta -= KeyTurnSpeed * (float)delta;
+        if (Input.IsPhysicalKeyPressed(Key.Down))  pitchDelta += KeyTurnSpeed * (float)delta;
         _yaw += yawDelta;
         _pitch = Mathf.Clamp(_pitch + pitchDelta, -1.4f, 1.4f);
     }
@@ -192,8 +192,8 @@ public partial class CameraController3D : Camera3D
         // Maus-Bewegung im Look-Modus aendert Yaw/Pitch.
         if (@event is InputEventMouseMotion motion && _mouseLook)
         {
-            _yaw -= motion.Relative.X * MouseSensitivity;
-            _pitch = Mathf.Clamp(_pitch - motion.Relative.Y * MouseSensitivity, -1.4f, 1.4f);
+            _yaw += motion.Relative.X * MouseSensitivity;
+            _pitch = Mathf.Clamp(_pitch + motion.Relative.Y * MouseSensitivity, -1.4f, 1.4f);
             GetTree().Root.SetInputAsHandled();
         }
     }
@@ -263,10 +263,10 @@ public partial class CameraController3D : Camera3D
         // Maus-Bewegung im Orbit-Look-Modus dreht die Kamera um das Target.
         if (@event is InputEventMouseMotion motion && _mouseLook)
         {
-            _followOrbitYaw   -= motion.Relative.X * MouseSensitivity;
+            _followOrbitYaw   += motion.Relative.X * MouseSensitivity;
             // Pitch zwischen knapp ueber dem Boden (0.05 rad) und fast senkrecht (Pi/2 - 0.05).
             _followOrbitPitch  = Mathf.Clamp(
-                _followOrbitPitch - motion.Relative.Y * MouseSensitivity,
+                _followOrbitPitch + motion.Relative.Y * MouseSensitivity,
                 0.05f, Mathf.Pi / 2f - 0.05f);
             GetTree().Root.SetInputAsHandled();
         }
