@@ -1,4 +1,5 @@
 using Godot;
+using System.Collections.Generic;
 using Maze.Model;
 
 namespace Maze.Views;
@@ -21,7 +22,11 @@ public partial class MazeView3D : Node3D
     private DirectionalLight3D _sun = null!;
     private OmniLight3D _playerLight = null!;
     private WorldEnvironment _worldEnv = null!;
+    private Node3D _player = null!;
+    private MultiMeshInstance3D _visitedPads = null!;
     private Model.Maze _maze = null!;
+    private readonly HashSet<int> _visitedCellKeys = new();
+    private int _visitedPadCount;
 
     private bool _exploreTarget;
     private float _exploreFactor;
@@ -37,6 +42,16 @@ public partial class MazeView3D : Node3D
         AlbedoColor = new Color("#2c2c2c")
     };
 
+    private static readonly StandardMaterial3D VisitedPadMaterial = new()
+    {
+        AlbedoColor = new Color(1.0f, 0.92f, 0.80f),
+        EmissionEnabled = true,
+        Emission = new Color(1.0f, 0.94f, 0.84f),
+        EmissionEnergyMultiplier = 1.7f,
+        Roughness = 0.2f,
+        Metallic = 0.0f
+    };
+
     // Start- und Ziel-Marker werden bei jedem Rebuild neu erstellt.
     private Node3D _startMarker;
     private Node3D _goalMarker;
@@ -49,8 +64,11 @@ public partial class MazeView3D : Node3D
         _wallsVertical = GetNode<MultiMeshInstance3D>("WallContainer/WallsVertical");
         _camera = GetNode<CameraController3D>("Camera3D");
         _sun = GetNode<DirectionalLight3D>("Sun");
+        _player = GetNode<Node3D>("Player");
         _playerLight = GetNode<OmniLight3D>("Player/PlayerLight");
         _worldEnv = GetNode<WorldEnvironment>("WorldEnvironment");
+
+        BuildVisitedPadRenderer();
 
         // Material zuweisen - die in der .tscn voreingestellten BoxMeshes haben bewusst kein Material,
         // damit die Farbe zentral hier gesetzt werden kann.
@@ -70,11 +88,15 @@ public partial class MazeView3D : Node3D
     {
         float target = _exploreTarget ? 1f : 0f;
         if (Mathf.IsEqualApprox(_exploreFactor, target))
+        {
+            UpdateVisitedTrail();
             return;
+        }
 
         float lerpStep = ExploreLerpSpeed * (float)delta;
         _exploreFactor = Mathf.MoveToward(_exploreFactor, target, lerpStep);
         ApplyExploreFactor(_exploreFactor);
+        UpdateVisitedTrail();
     }
 
     public void SetMaze(Model.Maze maze)
@@ -97,7 +119,80 @@ public partial class MazeView3D : Node3D
 
         BuildFloor(_maze);
         BuildWalls(_maze);
+        ClearVisitedTrail();
         PlaceMarkers(_maze);
+    }
+
+    private void BuildVisitedPadRenderer()
+    {
+        _visitedPads = new MultiMeshInstance3D
+        {
+            Name = "VisitedPads",
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            MaterialOverride = VisitedPadMaterial
+        };
+
+        var multimesh = new MultiMesh
+        {
+            TransformFormat = MultiMesh.TransformFormatEnum.Transform3D,
+            Mesh = new CylinderMesh
+            {
+                TopRadius = CellSize * 0.22f,
+                BottomRadius = CellSize * 0.22f,
+                Height = 0.018f,
+                RadialSegments = 18
+            },
+            InstanceCount = 0,
+            VisibleInstanceCount = 0
+        };
+
+        _visitedPads.Multimesh = multimesh;
+        AddChild(_visitedPads);
+    }
+
+    private void ClearVisitedTrail()
+    {
+        _visitedCellKeys.Clear();
+        _visitedPadCount = 0;
+
+        if (_visitedPads?.Multimesh == null)
+            return;
+
+        var mm = _visitedPads.Multimesh;
+        int capacity = _maze == null ? 0 : _maze.Width * _maze.Height;
+        if (mm.InstanceCount != capacity)
+            mm.InstanceCount = capacity;
+
+        mm.VisibleInstanceCount = 0;
+    }
+
+    private void UpdateVisitedTrail()
+    {
+        if (!Visible || _maze == null || _player == null || !_player.Visible)
+            return;
+
+        int cellX = Mathf.FloorToInt(_player.GlobalPosition.X / CellSize);
+        int cellY = Mathf.FloorToInt(_player.GlobalPosition.Z / CellSize);
+        if (!_maze.IsInside(cellX, cellY))
+            return;
+
+        int key = cellY * _maze.Width + cellX;
+        if (_visitedCellKeys.Contains(key))
+            return;
+
+        var mm = _visitedPads.Multimesh;
+        if (_visitedPadCount >= mm.InstanceCount)
+            return;
+
+        _visitedCellKeys.Add(key);
+        mm.SetInstanceTransform(_visitedPadCount, new Transform3D(
+            Basis.Identity,
+            new Vector3(
+                cellX * CellSize + CellSize * 0.5f,
+                0.009f,
+                cellY * CellSize + CellSize * 0.5f)));
+        _visitedPadCount++;
+        mm.VisibleInstanceCount = _visitedPadCount;
     }
 
     private void BuildFloor(Model.Maze maze)
