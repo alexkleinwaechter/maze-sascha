@@ -80,3 +80,9 @@ script = ExtResource("6_fpcam")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Env_explore")
+
+[node name="Guards" type="Node3D" parent="."]
+
+[node name="DetectAudio" type="AudioStreamPlayer" parent="."]
+
+[node name="EscapeAudio" type="AudioStreamPlayer" parent="."]

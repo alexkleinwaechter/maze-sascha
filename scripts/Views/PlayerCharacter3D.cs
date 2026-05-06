@@ -28,6 +28,24 @@ public partial class PlayerCharacter3D : Node3D
     /// </summary>
     public bool ExternalBodyYaw { get; set; }
 
+    /// <summary>Schleichmodus aktiv: Speed * 0.6, Detection-Range halbiert.</summary>
+    public bool IsSneaking { get; private set; }
+
+    /// <summary>Multiplikator fuer Schleichmodus auf MoveSpeed.</summary>
+    private const float SneakSpeedFactor = 0.6f;
+
+    /// <summary>
+    /// Logische aktuelle Zelle im Manual-Modus (Zielzelle waehrend Cell-Animation).
+    /// Fuer Kollisionspruefung mit Guards.
+    /// </summary>
+    public Cell ManualCurrentCell => _manualCell;
+
+    /// <summary>
+    /// Spec-Regel fuer Sichttest: Quellzelle waehrend Cell-Animation, sonst aktuelle Zelle.
+    /// Vermeidet "wieso hat er mich erwischt waehrend ich lief"-Frust.
+    /// </summary>
+    public Cell ManualSightCell => _isAnimatingCell && _animSourceCell != null ? _animSourceCell : _manualCell;
+
     // ---- Phase 19: LegoFigure-Referenz ----
     private LegoFigure _figure;
 
@@ -63,6 +81,7 @@ public partial class PlayerCharacter3D : Node3D
     private Vector3 _animTo;
     private float _animElapsed;
     private float _animDuration;
+    private Cell _animSourceCell;   // Quellzelle waehrend Animation (fuer Guard-Sichttest)
 
     /// <summary>
     /// Beendet jede laufende Animation und versteckt die Figur.
@@ -217,19 +236,27 @@ public partial class PlayerCharacter3D : Node3D
         Cell next = _manualMaze.GetNeighbor(_manualCell, dir.Value);
         if (next == null) return;
 
-        // Animation starten. Dauer = 1 / MoveSpeed (Sekunden pro Zelle).
+        // Animation starten. Dauer = 1 / (MoveSpeed * SneakFactor).
         _animFrom = Position;
         _animTo = CellToWorld(next);
+        _animSourceCell = _manualCell;
 
         // Figur sofort in Bewegungsrichtung drehen (beim ersten Frame der Animation) —
         // im FPS-Modus uebernimmt die Maus die Body-Rotation, deshalb hier ueberspringen.
         if (!ExternalBodyYaw)
             FaceDirection(_animTo - _animFrom);
         _animElapsed = 0f;
-        _animDuration = 1f / Mathf.Max(0.5f, MoveSpeed);
+        float effectiveSpeed = MoveSpeed * (IsSneaking ? SneakSpeedFactor : 1f);
+        _animDuration = 1f / Mathf.Max(0.5f, effectiveSpeed);
         _isAnimatingCell = true;
         _manualCell = next;
     }
+
+    /// <summary>
+    /// Update wird aus Main pro Frame aufgerufen oder ueber Input direkt - hier reichen
+    /// wir den Schleich-Status an die Spielfigur weiter.
+    /// </summary>
+    public void SetSneaking(bool sneaking) => IsSneaking = sneaking;
 
     private Direction? GetManualDirectionFromView()
     {

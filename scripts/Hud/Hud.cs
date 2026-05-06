@@ -22,6 +22,8 @@ public partial class Hud : CanvasLayer
     [Signal] public delegate void ExploreModeToggleEventHandler(bool enabled);
     [Signal] public delegate void PlayManualToggleEventHandler(bool active);
     [Signal] public delegate void FirstPersonToggleEventHandler(bool active);
+    [Signal] public delegate void GuardsToggleEventHandler(bool active);
+    [Signal] public delegate void GuardDifficultyChangedEventHandler(int difficulty);
 
     // ---- Knotenreferenzen (in _Ready aufgeloest) ----
     private HSlider _widthSlider = null!;
@@ -47,6 +49,10 @@ public partial class Hud : CanvasLayer
     private Label _widthLabel = null!;
     private Label _heightLabel = null!;
     private Label _speedLabel = null!;
+    private CheckBox _guardsToggle = null!;
+    private OptionButton _guardDifficultyChooser = null!;
+    private Label _guardStatusLabel = null!;
+    private Label _sneakIconLabel = null!;
 
     public override void _Ready()
     {
@@ -73,6 +79,10 @@ public partial class Hud : CanvasLayer
         _firstPersonToggle = GetNode<CheckBox>("Root/Margin/VBox/Algos/FirstPersonToggle");
         _playManualButton = GetNode<Button>("Root/Margin/VBox/Buttons/PlayManualButton");
         _victoryLabel = GetNode<Label>("Root/Margin/VBox/VictoryLabel");
+        _guardsToggle = GetNode<CheckBox>("Root/Margin/VBox/GuardsRow/GuardsToggle");
+        _guardDifficultyChooser = GetNode<OptionButton>("Root/Margin/VBox/GuardsRow/GuardDifficultyChooser");
+        _guardStatusLabel = GetNode<Label>("Root/Margin/VBox/GuardsRow/GuardStatusLabel");
+        _sneakIconLabel = GetNode<Label>("Root/Margin/VBox/GuardsRow/SneakIconLabel");
 
         // ---- Slider-Werte initial sicherstellen ----
         _widthSlider.MinValue = 5;
@@ -124,9 +134,47 @@ public partial class Hud : CanvasLayer
         _exploreModeToggle.Toggled += OnExploreModeToggled;
         _firstPersonToggle.Toggled += OnFirstPersonToggled;
         _playManualButton.Toggled += OnPlayManualToggled;
+        _guardsToggle.Toggled += OnGuardsToggled;
+        _guardDifficultyChooser.ItemSelected += OnGuardDifficultyChanged;
 
         FillGeneratorChooser();
         FillSolverChooser();
+        FillGuardDifficultyChooser();
+    }
+
+    private void FillGuardDifficultyChooser()
+    {
+        _guardDifficultyChooser.Clear();
+        _guardDifficultyChooser.AddItem("Easy", 0);
+        _guardDifficultyChooser.AddItem("Normal", 1);
+        _guardDifficultyChooser.AddItem("Hard", 2);
+        _guardDifficultyChooser.Selected = 1;
+    }
+
+    private void OnGuardsToggled(bool active) =>
+        EmitSignal(SignalName.GuardsToggle, active);
+
+    private void OnGuardDifficultyChanged(long index) =>
+        EmitSignal(SignalName.GuardDifficultyChanged, (int)index);
+
+    /// <summary>Wird vom Director ueber Main getriggert (Entdeckt/Suche/Entkommen).</summary>
+    public void SetGuardStatus(string text)
+    {
+        _guardStatusLabel.Text = text ?? "";
+    }
+
+    /// <summary>Sneak-Icon ein-/ausblenden.</summary>
+    public void SetSneakIcon(bool active)
+    {
+        _sneakIconLabel.Visible = active;
+    }
+
+    /// <summary>Niederlage-Anzeige; teilt sich das VictoryLabel.</summary>
+    public void ShowDefeat(string reason)
+    {
+        _victoryLabel.Text = $"Verloren - {reason}";
+        _victoryLabel.Modulate = new Color(1f, 0.4f, 0.4f);
+        _playManualButton.SetPressedNoSignal(false);
     }
 
     /// <summary>
@@ -223,13 +271,16 @@ public partial class Hud : CanvasLayer
 
     private void OnPlayManualToggled(bool active)
     {
-        _victoryLabel.Text = ""; // alte Sieg-Anzeige verbergen, sobald neu gestartet wird
+        _victoryLabel.Text = ""; // alte Sieg-/Niederlage-Anzeige verbergen
+        _victoryLabel.Modulate = new Color(1f, 0.85f, 0.2f); // zurueck auf Sieg-Gelb
+        _guardStatusLabel.Text = "";
         EmitSignal(SignalName.PlayManualToggle, active);
     }
 
     public void ShowVictory(double seconds)
     {
         _victoryLabel.Text = $"Geschafft in {seconds:0.00} s!";
+        _victoryLabel.Modulate = new Color(1f, 0.85f, 0.2f);
         // Den Button automatisch zurueckstellen, damit man direkt einen neuen Run starten kann.
         _playManualButton.SetPressedNoSignal(false);
     }
