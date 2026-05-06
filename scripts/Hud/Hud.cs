@@ -21,6 +21,7 @@ public partial class Hud : CanvasLayer
     [Signal] public delegate void FollowCamToggleEventHandler(bool enabled);
     [Signal] public delegate void ExploreModeToggleEventHandler(bool enabled);
     [Signal] public delegate void PlayManualToggleEventHandler(bool active);
+    [Signal] public delegate void FirstPersonToggleEventHandler(bool active);
 
     // ---- Knotenreferenzen (in _Ready aufgeloest) ----
     private HSlider _widthSlider = null!;
@@ -40,6 +41,7 @@ public partial class Hud : CanvasLayer
     private CheckBox _unboundedToggle = null!;
     private CheckBox _followCamToggle = null!;
     private CheckBox _exploreModeToggle = null!;
+    private CheckBox _firstPersonToggle = null!;
     private Button _playManualButton = null!;
     private Label _victoryLabel = null!;
     private Label _widthLabel = null!;
@@ -68,6 +70,7 @@ public partial class Hud : CanvasLayer
         _unboundedToggle = GetNode<CheckBox>("Root/Margin/VBox/SpeedRow/UnboundedToggle");
         _followCamToggle = GetNode<CheckBox>("Root/Margin/VBox/Algos/FollowCamToggle");
         _exploreModeToggle = GetNode<CheckBox>("Root/Margin/VBox/Algos/ExploreModeToggle");
+        _firstPersonToggle = GetNode<CheckBox>("Root/Margin/VBox/Algos/FirstPersonToggle");
         _playManualButton = GetNode<Button>("Root/Margin/VBox/Buttons/PlayManualButton");
         _victoryLabel = GetNode<Label>("Root/Margin/VBox/VictoryLabel");
 
@@ -119,6 +122,7 @@ public partial class Hud : CanvasLayer
         _unboundedToggle.Toggled += OnUnboundedToggled;
         _followCamToggle.Toggled += OnFollowCamToggled;
         _exploreModeToggle.Toggled += OnExploreModeToggled;
+        _firstPersonToggle.Toggled += OnFirstPersonToggled;
         _playManualButton.Toggled += OnPlayManualToggled;
 
         FillGeneratorChooser();
@@ -210,6 +214,12 @@ public partial class Hud : CanvasLayer
 
     private void OnExploreModeToggled(bool enabled) =>
         EmitSignal(SignalName.ExploreModeToggle, enabled);
+
+    private void OnFirstPersonToggled(bool active) =>
+        EmitSignal(SignalName.FirstPersonToggle, active);
+
+    public void SetFirstPersonPressed(bool pressed) =>
+        _firstPersonToggle.SetPressedNoSignal(pressed);
 
     private void OnPlayManualToggled(bool active)
     {

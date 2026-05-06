@@ -94,6 +94,9 @@ text = "Verfolger-Kamera"
 [node name="ExploreModeToggle" type="CheckBox" parent="Root/Margin/VBox/Algos"]
 text = "Entdeckungs-Modus"
 
+[node name="FirstPersonToggle" type="CheckBox" parent="Root/Margin/VBox/Algos"]
+text = "First-Person"
+
 [node name="Buttons" type="HBoxContainer" parent="Root/Margin/VBox"]
 
 [node name="GenerateButton" type="Button" parent="Root/Margin/VBox/Buttons"]

@@ -21,6 +21,13 @@ public partial class PlayerCharacter3D : Node3D
     /// <summary>Y-Anhebung der Figur. Lego-Figur hat Boden auf Y=0, daher 0.0.</summary>
     [Export] public float StandHeight = 0.0f;
 
+    /// <summary>
+    /// Wenn true, wird FaceDirection() NICHT aufgerufen — die Body-Rotation kommt
+    /// dann von aussen (z.B. FirstPersonCameraController). Wird von Main beim
+    /// Aktivieren des FPS-Modus auf true gesetzt.
+    /// </summary>
+    public bool ExternalBodyYaw { get; set; }
+
     // ---- Phase 19: LegoFigure-Referenz ----
     private LegoFigure _figure;
 
@@ -171,8 +178,10 @@ public partial class PlayerCharacter3D : Node3D
             Position += toTarget.Normalized() * step;
         }
 
-        // Figur in Laufrichtung drehen.
-        FaceDirection(toTarget);
+        // Figur in Laufrichtung drehen — entfaellt im FPS-Modus, da der Body-Yaw
+        // dann von aussen (Maus) gesteuert wird.
+        if (!ExternalBodyYaw)
+            FaceDirection(toTarget);
     }
 
     private void ProcessManual(double delta)
@@ -212,8 +221,10 @@ public partial class PlayerCharacter3D : Node3D
         _animFrom = Position;
         _animTo = CellToWorld(next);
 
-        // Figur sofort in Bewegungsrichtung drehen (beim ersten Frame der Animation).
-        FaceDirection(_animTo - _animFrom);
+        // Figur sofort in Bewegungsrichtung drehen (beim ersten Frame der Animation) —
+        // im FPS-Modus uebernimmt die Maus die Body-Rotation, deshalb hier ueberspringen.
+        if (!ExternalBodyYaw)
+            FaceDirection(_animTo - _animFrom);
         _animElapsed = 0f;
         _animDuration = 1f / Mathf.Max(0.5f, MoveSpeed);
         _isAnimatingCell = true;
