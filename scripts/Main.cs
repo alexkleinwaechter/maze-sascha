@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Godot;
+using Maze.Gameplay;
 using Maze.Generators;
 using Maze.Model;
 using Maze.Solvers;
@@ -51,6 +52,14 @@ public partial class Main : Node
     private double _manualStartTimeSeconds;
     private bool _firstPersonActive;
 
+    // ---- Guards (Phase 23) ----
+    private GuardDirector _guardDirector;
+    private bool _guardsEnabled;
+    private GuardDifficulty _guardDifficulty = GuardDifficulty.Normal;
+    private Node3D _guardsContainer;
+    private AudioStreamPlayer _guardDetectAudio;
+    private AudioStreamPlayer _guardEscapeAudio;
+
     private readonly Random _random = new();
     private readonly PerformanceTracker _tracker = new();
     private bool _suppressViewRefresh;
@@ -79,11 +88,21 @@ public partial class Main : Node
         _hud.ExploreModeToggle += OnExploreModeToggled;
         _hud.PlayManualToggle += OnPlayManualToggle;
         _hud.FirstPersonToggle += OnFirstPersonToggled;
+        _hud.GuardsToggle += OnGuardsToggled;
+        _hud.GuardDifficultyChanged += OnGuardDifficultyChanged;
 
         _player = GetNode<PlayerCharacter3D>("MazeView3D/Player");
         _player.GoalReached += OnBotGoalReached;
         _orbitCamera = _view3D.GetNode<CameraController3D>("Camera3D");
         _fpCamera = _view3D.GetNode<FirstPersonCameraController>("Player/HeadAnchor/FirstPersonCamera");
+
+        _guardsContainer = _view3D.GetNode<Node3D>("Guards");
+        _guardDetectAudio = _view3D.GetNode<AudioStreamPlayer>("DetectAudio");
+        _guardEscapeAudio = _view3D.GetNode<AudioStreamPlayer>("EscapeAudio");
+        _guardDirector = new GuardDirector { Name = "GuardDirector" };
+        AddChild(_guardDirector);
+        _guardDirector.StatusChanged += OnGuardStatusChanged;
+        _guardDirector.PlayerCaught += OnPlayerCaught;
 
         _runner.GenerationStepProduced += OnGenerationStepProduced;
         _runner.GenerationFinished += OnGenerationFinished;
@@ -98,14 +117,23 @@ public partial class Main : Node
         GD.Print("[Main] HUD, Runner, 2D-View und 3D-View verbunden.");
     }
 
-    public override void _Process(double delta) { }
-
     public override void _PhysicsProcess(double delta) { }
 
     public override void _UnhandledInput(InputEvent @event)
     {
         if (@event is InputEventKey { Pressed: true, Keycode: Key.Space } && _runner.IsPaused)
             _runner.ForceSingleStep();
+    }
+
+    public override void _Process(double delta)
+    {
+        if (_isManualMode)
+        {
+            // Schleichmodus: Shift gedrueckt halten waehrend Bewegung.
+            bool sneaking = Input.IsPhysicalKeyPressed(Key.Shift);
+            _player.SetSneaking(sneaking);
+            _hud.SetSneakIcon(sneaking);
+        }
     }
 
     public override void _ExitTree() => GD.Print("[Main] _ExitTree.");
@@ -122,6 +150,9 @@ public partial class Main : Node
         _stats.UpdateStats(_tracker.Elapsed, _tracker.Steps, _tracker.VisitedCells, _tracker.PathLength, 0);
 
         // Vor einer Neugenerierung alte Bot-Animation und Pfadreste sicher verwerfen.
+        // Wichtig: aktive Guards stoppen, sonst arbeiten sie auf Cell-Pointern eines
+        // bereits ungueltigen Mazes weiter.
+        StopManualAndGuardsIfActive();
         _solverPath.Clear();
         _player.Hide();
         _runner.StopAll();
@@ -287,6 +318,7 @@ public partial class Main : Node
 
     private void OnResetRequested()
     {
+        StopManualAndGuardsIfActive();
         _runner.StopAll();
         _solverPath.Clear();
         _player.Hide();
@@ -297,6 +329,22 @@ public partial class Main : Node
         _view2D.SetMaze(resetMaze);
         _view3D.SetMaze(resetMaze);
         GD.Print("[Main] Reset.");
+    }
+
+    /// <summary>
+    /// Beendet Manual-Mode und Guards-Lifecycle sauber, falls aktiv.
+    /// Wird vor Reset/Neugenerierung aufgerufen, damit keine Cell-Referenzen aufs alte Maze ueberleben.
+    /// </summary>
+    private void StopManualAndGuardsIfActive()
+    {
+        if (_isManualMode)
+        {
+            OnStopManualRequested();
+        }
+        else if (_guardDirector != null && _guardDirector.IsActive)
+        {
+            _guardDirector.Stop();
+        }
     }
 
     private void OnViewToggled(bool use3D)
@@ -380,16 +428,90 @@ public partial class Main : Node
         var camera = _view3D.GetNode<CameraController3D>("Camera3D");
         camera.EnableFollow(_player);
 
+        if (_guardsEnabled)
+            StartGuards();
+
         GD.Print("[Main] Selbst spielen aktiviert.");
+    }
+
+    private void StartGuards()
+    {
+        if (_currentMaze == null || _solverStart == null) return;
+        var preset = GuardDifficultyPreset.For(_guardDifficulty);
+        _guardDirector.Start(
+            _currentMaze,
+            _solverStart,
+            _view3D.CellSize,
+            _player.MoveSpeed,
+            _guardsContainer,
+            _guardDetectAudio,
+            _guardEscapeAudio,
+            getPlayerSightCell: () => _player.ManualSightCell,
+            getPlayerCurrentCell: () => _player.ManualCurrentCell,
+            getPlayerSneaking: () => _player.IsSneaking,
+            guardCount: preset.GuardCount);
+    }
+
+    private void OnGuardsToggled(bool active)
+    {
+        _guardsEnabled = active;
+        if (!active)
+        {
+            if (_guardDirector.IsActive) _guardDirector.Stop();
+            return;
+        }
+        if (_isManualMode)
+        {
+            // Defensiv: schon laufende Guards zuerst stoppen, dann sauber neu starten.
+            if (_guardDirector.IsActive) _guardDirector.Stop();
+            StartGuards();
+        }
+    }
+
+    private void OnGuardDifficultyChanged(int index)
+    {
+        _guardDifficulty = index switch
+        {
+            0 => GuardDifficulty.Easy,
+            2 => GuardDifficulty.Hard,
+            _ => GuardDifficulty.Normal
+        };
+        if (_guardDirector.IsActive && _isManualMode)
+        {
+            _guardDirector.Stop();
+            StartGuards();
+        }
+    }
+
+    private void OnGuardStatusChanged(string text) => _hud.SetGuardStatus(text);
+
+    private void OnPlayerCaught()
+    {
+        HandleManualDefeat("erwischt");
+    }
+
+    /// <summary>
+    /// Zentraler Eintrittspunkt fuer Niederlage im Manual-Modus.
+    /// Stoppt Guards, beendet Manual-Mode und zeigt HUD-Defeat-Anzeige.
+    /// </summary>
+    public void HandleManualDefeat(string reason)
+    {
+        if (!_isManualMode) return;
+        _hud.ShowDefeat(reason);
+        OnStopManualRequested();
     }
 
     private void OnStopManualRequested()
     {
         if (!_isManualMode) return;
         _player.DisableManualMode();
+        _player.SetSneaking(false); // Sneak-Flag explizit reseten, sonst bleibt er beim naechsten Run aktiv
         _isManualMode = false;
         var camera = _view3D.GetNode<CameraController3D>("Camera3D");
         camera.DisableFollow();
+        if (_guardDirector != null && _guardDirector.IsActive)
+            _guardDirector.Stop();
+        _hud.SetSneakIcon(false);
         GD.Print("[Main] Selbst spielen beendet.");
     }
 
