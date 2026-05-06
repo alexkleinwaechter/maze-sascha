@@ -1,4 +1,4 @@
-# Maze School Project — First-Person-Modus (Phasen 20–21) — Implementierungsplan
+# Maze School Project — First-Person-Modus (Phase 20, Phase 21 verworfen) — Implementierungsplan
 
 > **Für agentische Worker:** REQUIRED SUB-SKILL: Verwende `superpowers:subagent-driven-development` (empfohlen) oder `superpowers:executing-plans` zur task-by-task-Umsetzung. Schritte verwenden Checkbox-Syntax (`- [ ]`).
 >
@@ -10,14 +10,15 @@
 >
 > **Vorläufer-Plan C:** [`2026-04-30-maze-gamification.md`](2026-04-30-maze-gamification.md) (Phasen 16–19 — Solver-Bot, Selbst-Spiel-Modus, Entdeckungs-Modus, Lego-Figur).
 
-**Goal:** Einen First-Person-Modus wie in einem klassischen Ego-Shooter ergänzen. Die Kamera sitzt auf Augenhöhe der Lego-Figur, die Blickrichtung folgt der Maus, und der Körper der Spielfigur dreht sich beim Umsehen synchron mit (so dass W immer "nach vorne, dorthin wo ich schaue" bedeutet). Zusätzlich gibt es einen **Free-Look-Modus** (`Alt`-Taste halten): solange `Alt` gedrückt ist, dreht sich nur die Kamera, der Körper bleibt stehen — der Spieler kann also umsehen, ohne seine Bewegungsrichtung zu wechseln. Nach dem Loslassen schwenkt die Kamera weich zurück auf die Körper-Vorwärtsrichtung.
+**Goal:** Einen First-Person-Modus wie in einem klassischen Ego-Shooter ergänzen. Die Kamera sitzt auf Augenhöhe der Lego-Figur, die Blickrichtung folgt der Maus, und der Körper der Spielfigur dreht sich beim Umsehen synchron mit (so dass W immer "nach vorne, dorthin wo ich schaue" bedeutet).
 
-**Didaktischer Bogen:** Phase 17 (Selbst spielen) zeigte das Maze aus der Vogelperspektive mit Verfolger-Kamera. Phase 20 ändert die Perspektive auf "ich stehe selbst zwischen den Wänden" — das macht den Suchraum noch unmittelbarer. Phase 21 führt das Konzept "Kopf vs. Körper" ein: Hardware (Maus) steuert per Default beides gemeinsam; mit einem Modifier kann man Kopf und Körper entkoppeln. Daraus lässt sich im Unterricht das Thema *Eingabe-Mapping* und *Modi vs. Modifier-Tasten* aufgreifen.
+> **Status (2026-05-06):** Phase 20 ist umgesetzt und gemerged (Commit `e4a80ee`). **Phase 21 (Free-Look mit Alt-Hold) wurde verworfen** — Begründung siehe unten beim Phase-Header.
 
-**Architecture:** Zwei aufeinander aufbauende Phasen, beide ändern primär `MazeView3D.tscn`, `CameraController3D.cs` und `PlayerCharacter3D.cs`.
+**Didaktischer Bogen:** Phase 17 (Selbst spielen) zeigte das Maze aus der Vogelperspektive mit Verfolger-Kamera. Phase 20 ändert die Perspektive auf "ich stehe selbst zwischen den Wänden" — das macht den Suchraum noch unmittelbarer.
+
+**Architecture:** `MazeView3D.tscn`, `CameraController3D.cs` und `PlayerCharacter3D.cs`.
 
 - **Phase 20** ergänzt einen zweiten Camera3D-Knoten als Kind eines neuen `HeadAnchor`-Pivots unter `Player`. Der HeadAnchor sitzt auf Augenhöhe (~0,6 m über dem Boden, oberhalb der Lego-Figur). Eine HUD-Checkbox "First-Person" schaltet zwischen der bestehenden Free/Follow-Kamera und der neuen Ego-Kamera um. Der `FirstPersonCameraController` liest Mausbewegung und schreibt **Yaw** in `Player.Rotation.Y` (also die Körperdrehung der gesamten Spielfigur) und **Pitch** in `HeadAnchor.Rotation.X` (nur der Kopf nickt). Diese Trennung ist Standard-Best-Practice für FPS-Kameras: zwei separate Achsen auf zwei separate Knoten verhindern Gimbal-Lock und halten die Bewegungslogik einfach (W folgt immer Player-Forward).
-- **Phase 21** baut darauf den Free-Look-Modus auf. Solange `Alt` gehalten wird, schreibt die Mausbewegung Yaw nicht mehr in `Player.Rotation.Y`, sondern in einen *zusätzlichen* Yaw-Offset auf dem `HeadAnchor`. Das entkoppelt Kopf und Körper. Beim Loslassen läuft per Tween eine 0,15-s-Lerp-Animation auf 0° zurück, sodass der Blick weich zur Körper-Vorwärtsrichtung snapt. Pitch verhält sich unverändert (immer am HeadAnchor).
 
 **Recherche-Quellen (Stand Mai 2026):**
 - [Yo Soy Freeman — Achieving better mouse input in Godot 4: The perfect camera controller](https://yosoyfreeman.github.io/article/godot/tutorial/achieving-better-mouse-input-in-godot-4-the-perfect-camera-controller/) — Best Practices: Yaw auf Body, Pitch auf Head, Pitch-Clamp ±89°, `Input.UseAccumulatedInput = false`, `Basis.Orthonormalize()` nach jeder Drehung.
@@ -544,11 +545,21 @@ git commit -m "Task 20.5: ExternalBodyYaw-Flag verhindert FaceDirection-Konflikt
 
 ---
 
-## Phase 21 — Free-Look: Schauen ohne Bewegungsrichtungswechsel
+## Phase 21 — Free-Look: Schauen ohne Bewegungsrichtungswechsel — **VERWORFEN (2026-05-06)**
 
-Ziel: Während die `Alt`-Taste gehalten wird, dreht die Maus nur die Kamera (genauer: den `HeadAnchor`-Yaw-Offset), nicht mehr den Body. So kann der Spieler nach links schauen, während er weiter geradeaus laufen würde. Beim Loslassen schwenkt die Kamera per Tween in 0,15 s zurück auf 0° relativ zum Body.
+> **Status: VERWORFEN.** Diese Phase wurde nach Abschluss von Phase 20 verworfen und nicht umgesetzt. Die ursprünglichen Tasks bleiben unten zu Dokumentationszwecken stehen.
+>
+> **Begründung:**
+> - Free-Look ist primär eine Mechanik für *kontinuierliche* Bewegung (Shooter, Open-World). In diesem Projekt ist Bewegung **cell-aligned und diskret** (1 Tastendruck = 1 Zelle). „Schauen, während man läuft" findet im Spiel-Modell faktisch nicht statt — der Mehrwert von Free-Look entfällt damit weitgehend.
+> - Der einzige verbleibende Use-Case („kurz seitlich blicken, ohne die Bewegungsrichtung zu wechseln") ist im Labyrinth marginal: man dreht ohnehin permanent mit der Maus weiter.
+> - Implementierungskosten (Alt-Hold-Erkennung, Snap-Back-Tween, zweiter Movement-Pfad in `GetManualDirectionFromView`, zusätzlicher HUD-Hinweis) stehen in keinem guten Verhältnis zum Spielwert.
+> - Der angekündigte didaktische Bogen „Modus vs. Modifier" (Z.15 ursprünglich) ist konstruiert; das Konzept lässt sich an natürlicheren Stellen lehren.
+>
+> **Wann sinnvoll wieder aufgreifen?** Falls eines Tages „Continuous Movement" (siehe „Zukünftige Erweiterungen" am Ende) implementiert wird, ergibt Free-Look Sinn und sollte gemeinsam damit geplant werden.
 
-**Didaktischer Punkt:** Der Unterschied zwischen *Modus* (z.B. FPS-Modus, der bis zum Abschalten aktiv bleibt) und *Modifier* (Alt-Hold, das nur während des Drückens wirkt) ist grundlegend für UI-Design. Hier sieht man beides direkt nebeneinander.
+Ziel (ursprünglich): Während die `Alt`-Taste gehalten wird, dreht die Maus nur die Kamera (genauer: den `HeadAnchor`-Yaw-Offset), nicht mehr den Body. So kann der Spieler nach links schauen, während er weiter geradeaus laufen würde. Beim Loslassen schwenkt die Kamera per Tween in 0,15 s zurück auf 0° relativ zum Body.
+
+**Didaktischer Punkt (ursprünglich):** Der Unterschied zwischen *Modus* (z.B. FPS-Modus, der bis zum Abschalten aktiv bleibt) und *Modifier* (Alt-Hold, das nur während des Drückens wirkt) ist grundlegend für UI-Design. Hier sieht man beides direkt nebeneinander.
 
 ### Task 21.1: `FreeLookHeld` aus `Alt`-Tastenstatus speisen
 
@@ -769,7 +780,7 @@ git commit -m "Task 21.3: Hinweis 'Alt = umsehen' im HUD"
 
 ## Abschluss-Smoke-Test (gesamter Plan)
 
-Nach Phase 21 sollte folgende Bedien-Sequenz vollständig funktionieren:
+Nach Phase 20 sollte folgende Bedien-Sequenz vollständig funktionieren (Phase 21 ist verworfen — die zugehörigen Schritte 7+8 entfallen):
 
 1. Spiel starten.
 2. Maze generieren (z.B. 25×25 Recursive Backtracker).
@@ -777,11 +788,9 @@ Nach Phase 21 sollte folgende Bedien-Sequenz vollständig funktionieren:
 4. "Selbst spielen" einschalten — Verfolger-Kamera von oben.
 5. "First-Person" einschalten — Cursor wird captured, Sicht aus Augenhöhe der Lego-Figur.
 6. Maus links/rechts → Body dreht sich, Sicht folgt. WASD bewegt cell-aligned in Blickrichtung.
-7. `Alt` halten + Maus links/rechts → nur Kamera dreht (max. ±100°). W bewegt weiter in alter Body-Richtung.
-8. `Alt` loslassen → Kamera schwenkt weich (~0,15 s) zurück.
-9. `Esc` → Cursor frei, HUD klickbar. Klick ins Spielbild → Cursor wieder captured.
-10. "First-Person" abschalten → Verfolger-Kamera wieder aktiv. Cursor frei.
-11. "Selbst spielen" abschalten → zurück in den Algorithmen-Modus.
+7. `Esc` → Cursor frei, HUD klickbar. Klick ins Spielbild → Cursor wieder captured.
+8. "First-Person" abschalten → Verfolger-Kamera wieder aktiv. Cursor frei.
+9. "Selbst spielen" abschalten → zurück in den Algorithmen-Modus.
 
 Wenn alle Schritte ohne Crash, ohne Cursor-Klemmer und ohne sichtbare Sprünge laufen, ist der Plan erfolgreich abgeschlossen.
 
@@ -790,7 +799,7 @@ Wenn alle Schritte ohne Crash, ohne Cursor-Klemmer und ohne sichtbare Sprünge l
 ## Zukünftige Erweiterungen (nicht Teil dieses Plans)
 
 - **Sprint / Schritt-Tempo per Shift:** Schnelleres Cell-Step-Tempo, ohne Wandkollisionen anzubrechen.
-- **Continuous Movement (statt Cell-Step):** CharacterBody3D mit echter Wandkollision für ein noch "echteres" FPS-Feel. Würde aber das Maze-konzeptuelle Modell ("Bewegung in diskreten Schritten") aufweichen.
+- **Continuous Movement (statt Cell-Step):** CharacterBody3D mit echter Wandkollision für ein noch "echteres" FPS-Feel. Würde aber das Maze-konzeptuelle Modell ("Bewegung in diskreten Schritten") aufweichen. **Falls dies kommt, ist auch Free-Look (siehe verworfene Phase 21) sinnvoll wieder aufzugreifen.**
 - **Crouch / Look-Down:** Auf eine Bodenmarkierung schauen, indem man sich duckt — könnte für eine spätere Inventar-/Item-Mechanik nützlich sein.
 - **Headbob (cinematisch):** Sinus-Welle auf `HeadAnchor.Position.Y` während Bewegung. Bewusst weggelassen, weil schnell motion-sickness-induzierend.
 - **Field-of-View-Slider:** HUD-Slider 60°–110° für Spieler mit unterschiedlichen Bildschirm-/Sehkomfort-Präferenzen.
